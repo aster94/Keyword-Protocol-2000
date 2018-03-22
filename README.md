@@ -1,4 +1,4 @@
-# the library is ready but need some cleaning, i will pubblish when it is ended
+# the library is ready but need some cleaning, i will pubblish it when it is ended
 https://github.com/arduino/arduino/wiki/arduino-ide-1.5:-library-specification
 https://www.arduino.cc/en/Reference/APIStyleGuide
 model: https://github.com/bolderflight/MPU9250
@@ -6,10 +6,19 @@ https://help.github.com/articles/basic-writing-and-formatting-syntax/
 
 
 # Keyword Protocol 2000
-The KWP2000 is a communications protocol used for on-board vehicle diagnostics systems (OBD) by Suzuki (SDS), Kawasaki (KDS), Yamaha (YDS) and Honda (HDS). It is based on the ISO 14230 and uses a single line called the K-line
+The KWP2000 is a communications protocol used for on-board vehicle diagnostics systems (OBD) by Suzuki (SDS), Kawasaki (KDS), Yamaha (YDS), Honda (HDS) and possibly more. It is based on the ISO 14230 and uses a single line called the K-line
+
 
 more info here and in the "documents" folder:
+
 https://en.wikipedia.org/wiki/Keyword_Protocol_2000
+
+
+### Tested Vehicles
+-Suzuki GSX-R 600 L1 (2011)
+
+### Future Development
+
 
 # Usage 
 please see:
