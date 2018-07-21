@@ -1,18 +1,19 @@
 #######################################
-# Syntax Coloring Map For ExampleLibrary
+# Syntax Coloring Map
 #######################################
 
 #######################################
 # Datatypes (KEYWORD1)
 #######################################
 
-Test	KEYWORD1
+KWP2000     KEYWORD1
 
 #######################################
 # Methods and Functions (KEYWORD2)
 #######################################
 
-doSomething	KEYWORD2
+test	KEYWORD2
+initKline KEYWORD2
 
 #######################################
 # Instances (KEYWORD2)

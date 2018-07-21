@@ -35,8 +35,7 @@ send a request to the ECU
 listen for the response from the ECU
 
 # Change Log - Version
-0.0.3 - write a mimimum documentation
 
-0.0.2 - library basic working 
+0.2 - library basic working 
 
-0.0.1 - created github repo
+0.1 - created github repo
