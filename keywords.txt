@@ -12,7 +12,6 @@ KWP2000     KEYWORD1
 # Methods and Functions (KEYWORD2)
 #######################################
 
-test	KEYWORD2
 initKline KEYWORD2
 
 #######################################

@@ -20,13 +20,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 /*  TODO
 controllare i tipi
 pid dal manzo / ecuhacking / forum ?
-gestione modello?
+gestione modello/marca?
 creare un array che memorizza gli errori?
-store array? meglio malloc/new?
-
-
-//working return 1
-//errors returns negative numbers
+add F before all serial buffer?
 */
 
 #ifndef KWP2000_h
@@ -34,46 +30,71 @@ store array? meglio malloc/new?
 
 #include "Arduino.h"
 
+//#define DEBUG_BT
+
+#ifdef DEBUG_BT
+#include "BluetoothSerial.h"
+#endif
 
 // These values are defined by the ISO protocol
 #define ISO_BYTE_DELAY 10
 #define ISO_MAX_SEND_TIME 2000
 #define ISO_DELAY_BETWEN_REQUEST 40
+#define ISO_KEEP_ALIVE 2000
+#define ISO_START_TIME 2000
 
-// debug level
+// debug level, todo enum
+#define DEBUG_LEVEL_NO_BIKE 15
 #define DEBUG_LEVEL_VERBOSE 10
 #define DEBUG_LEVEL_DEFAULT 5
 #define DEBUG_LEVEL_NONE 0
 
+const uint8_t maxLen = 60; // maximum lenght of a response from the ecu
 
+enum error
+{              // a nice collection of ECU Errors
+    EE_START,  // unable to start comunication
+    EE_STOP,   // unable to stop comunication
+    EE_TO,     // data is not for us
+    EE_FROM,   // data don't came from the ECU
+    EE_CS,     // checksum error
+    EE_ECHO,   // echo error
+    EE_MEMORY, // memory leak
+    EE_UNEX,   // unexpected error
+    EE_HEADER  // strange header
+};
 
-class KWP2000{
+class KWP2000
+{
   public:
-    int8_t test();
+    // SETUP
+    KWP2000(HardwareSerial *kline_serial, const uint32_t kline_baudrate, const uint8_t k_out_pin, const uint8_t model);
 
-    // config
-    KWP2000(HardwareSerial* kline_serial, const uint32_t kline_baudrate, const uint8_t k_out_pin, const uint8_t model);
-    void enableDebug(HardwareSerial* debug_serial, const uint32_t debug_baudrate, const uint8_t debug_level = DEBUG_LEVEL_VERBOSE);
+#ifdef DEBUG_BT
+    void enableDebug(BluetoothSerial *debug_serial, const String device_name, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT);
+#else
+    void enableDebug(HardwareSerial *debug_serial, const uint32_t debug_baudrate = 115200, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT);
+#endif
+
     void disableDebug();
     void setDebugLevel(const uint8_t debug_level);
     void enableDealerMode(const uint8_t dealer_pin);
     void dealerMode(const uint8_t dealer_mode);
 
-    //communication
-    int8_t initKline();   //make this returning 0 until the time pass
-    int8_t stopKline();   //same here
-    void requestSensorData();
-    int8_t sendRequest(const uint8_t toSend[], const uint8_t sendlen);
-    void listenResponse(uint8_t arr[]);//make it returning the pointer to the array?
-    void processSensorData(const uint8_t data[], const uint8_t dataLen); //move to private?
-    void keepAlive();
-    
-    //
+    // COMMUNICATION
+    void sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t use_delay = false);
+    void listenResponse(uint8_t data[], uint8_t *resp_len, const uint8_t use_delay = false);
+    int8_t requestSensorData();
+    int8_t initKline();
+    int8_t stopKline();
+    void keepAlive(uint16_t time = 1000);
+
+    // PRINT and GET
     void printStatus();
     void printError();
-    int8_t getState();
+    int8_t getStatus();
     int8_t getError();
-    void resetError();//should i remove this?
+    void resetError(); // todo should i remove this?
     uint8_t getGear();
     uint8_t getRPM();
     uint8_t getSpeed();
@@ -81,43 +102,41 @@ class KWP2000{
     uint8_t getIAP();
     uint8_t getECT();
     uint8_t getSTPS();
-    //voltage, temperature ecc
+    // todo voltage, temperature ecc
 
-  
   private:
-
     // declatations:
-    HardwareSerial* _kline;
-    uint32_t _kline_baudrate;
+    HardwareSerial *_kline;
+    uint32_t _kline_baudrate; //since it is defined from a protocol maybe it should be removed todo
     uint8_t _k_out_pin;
-    uint8_t _model;//useful?
+    uint8_t _model;
     uint8_t _dealer_pin;
 
-    HardwareSerial* _debug;
+    uint8_t _sequence_started = false;
+    uint64_t _start_time = 0;
+    uint64_t _time_elapsed = 0;
+    uint8_t *_pArray;
+    uint8_t _pArray_len = maxLen;
+    uint8_t _pArray_is_allocated = false;
+
+#ifdef DEBUG_BT
+    BluetoothSerial *_debug;
+#else
+    HardwareSerial *_debug;
+#endif
     uint32_t _debug_baudrate;
     uint8_t _debug_level = DEBUG_LEVEL_NONE;
+    uint8_t _ECU_status = false;
+    uint8_t _ECU_error = 0;
+    uint64_t _last_data_received;
 
-    uint8_t _ECUerror = 0;
-    //each bit describe an error
-    #define EE_START 0  // unable to start comunication
-    #define EE_STOP 1   // unable to stop comunication
-    #define EE_TO 2     // data is not for us
-    #define EE_FROM 3   // data don't came from the ECU
-    #define EE_CS 4     // checksum error
-    #define EE_ECHO 5   // echo error
-    #define EE_FUTURE 6 // future use
-    #define EE_FUTURE 7 // future use
-    uint8_t _SPEED, _RPM, _TPS, _IAP, _ECT, _IAT, _STPS, _GEAR, _GEAR1, _GEAR2, _GEAR3;
-
-
-    uint8_t _ECUstate = false;
-    uint64_t _lastDataSent;//?
-    uint64_t _lastDataRequested;//?
+    uint8_t _GEAR, _RPM, _SPEED, _TPS, _IAP, _ECT, _STPS;
+    uint8_t _GEAR1, _GEAR2, _GEAR3, _IAT;
 
     // private functions
+    void setError(uint8_t error);
     uint8_t calc_checksum(const uint8_t data[], const uint8_t len);
-    int8_t compareResponse (const uint8_t expectedResponse[], const uint8_t receivedResponse[], const uint8_t expectedResponseLen);
-
+    int8_t compareResponse(const uint8_t expectedResponse[], const uint8_t receivedResponse[], const uint8_t expectedResponseLen);
 };
 
 #endif

@@ -20,480 +20,682 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include "Arduino.h"
 #include "KWP2000.h"
 #include "PIDs.h"
+#include <new>//mdf
 
-const uint8_t maxLen = 60; //maximum lenght of a response from the ecu
-uint8_t storeArray[maxLen]; //array where I store the response from the ECU before the extraction of the data
+#ifdef DEBUG_BT
+#include "BluetoothSerial.h"
+#endif
 
-
-int8_t KWP2000::test(){
-}
+#define LEN(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
 
 ////////////// SETUP ////////////////
 
-KWP2000::KWP2000(HardwareSerial* kline_serial, const uint32_t kline_baudrate, const uint8_t k_out_pin, const uint8_t model){
-  _kline = kline_serial;
-  _kline_baudrate = kline_baudrate;
-  _k_out_pin = k_out_pin;
-  _model = model;
+KWP2000::KWP2000(HardwareSerial *kline_serial, const uint32_t kline_baudrate, const uint8_t k_out_pin, const uint8_t model)
+{
+    _kline = kline_serial;
+    _kline_baudrate = kline_baudrate;
+    _k_out_pin = k_out_pin;
+    _model = model;
+}
+#ifdef DEBUG_BT
+void KWP2000::enableDebug(BluetoothSerial *debug_serial, const String device_name, const uint8_t debug_level)
+{
+    _debug = debug_serial;
+    _debug->begin(device_name);
+    _debug_level = debug_level;
+
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->println("Debug enabled");
+    }
+}
+#else
+void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint32_t debug_baudrate, const uint8_t debug_level)
+{
+    _debug = debug_serial;
+    _debug->begin(debug_baudrate);
+    _debug_level = debug_level;
+
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->println("Debug enabled");
+    }
+}
+#endif
+
+void KWP2000::disableDebug()
+{
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->println("Debug disabled");
+    }
+    _debug_level = DEBUG_LEVEL_NONE;
+    _debug->end();
 }
 
-void KWP2000::enableDebug(HardwareSerial* debug_serial, const uint32_t debug_baudrate, const uint8_t debug_level){
-  _debug = debug_serial;
-  _debug->begin(debug_baudrate);
-  _debug_level = debug_level;
+void KWP2000::setDebugLevel(const uint8_t debug_level)
+{
+    _debug_level = debug_level;
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->print("Debug level: ");
+        _debug->println(debug_level);
+    }
 }
 
-void KWP2000::disableDebug(){
-  _debug->end();
+void KWP2000::enableDealerMode(const uint8_t dealer_pin)
+{
+    _dealer_pin = dealer_pin;
 }
 
-void KWP2000::setDebugLevel(const uint8_t debug_level){
-  _debug_level = debug_level;
-}
-
-void KWP2000::enableDealerMode(const uint8_t dealer_pin){
-  _dealer_pin = dealer_pin;
-}
-
-void KWP2000::dealerMode(const uint8_t dealer_mode){
-  digitalWrite(_dealer_pin, dealer_mode);
+void KWP2000::dealerMode(const uint8_t dealer_mode)
+{
+    digitalWrite(_dealer_pin, dealer_mode);
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->print("Dealer mode: ");
+        _debug->println(dealer_mode == 1 ? "Enabled" : "Disabled");
+    }
 }
 
 ////////////// COMMUNICATION ////////////////
 
-int8_t KWP2000::initKline(){
+void KWP2000::sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t use_delay)
+{
+    uint8_t echo = 0;
+    for (uint8_t i = 0; i < send_len; i++)
+    {
 
-  //allocate memory
+        _kline->write(to_send[i]);
+        //too few time? todo
 
-  pinMode(_k_out_pin, OUTPUT);
-  delay(5);
+        if (_kline->available() > 0)
+        {
+            echo = _kline->read();
+        }
 
-  digitalWrite(_k_out_pin, HIGH);
-  delay(2000);
-  digitalWrite(_k_out_pin, LOW);
-  delay(25);
-  digitalWrite(_k_out_pin, HIGH);
-  delay(25);
+        if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+        {
+            if (i == 0)
+            {
+                _debug->println("Sending - Echo");
+            }
+            _debug->print(to_send[i], HEX); //human readable values
+            _debug->print(" - ");
+            _debug->println(echo, HEX);
+        }
 
-  _kline->begin(_kline_baudrate);
-  delay(5);
-
-  sendRequest(startCom, sizeof(startCom));
-  listenResponse(storeArray);
-
-  if (compareResponse (startCom_ok, storeArray, sizeof(startCom_ok)) == true) {
-
-    //ECU is connected!
-    _ECUstate = true;
-    _ECUerror = 0;
-    return 1;
-
-  } else {
-
-    //failed initialization
-    _ECUstate = false;
-    bitSet (_ECUerror, EE_START);
-    return -1;
-  }
-}
-
-int8_t KWP2000::stopKline(){
-
-  //free memory
-  /*
-    is there any sequence or I just close and wait?
-    sendRequest(closeCom, sizeof(closeCom));
-
-    if (compareResponse(closeCom_ok, sizeof(closeCom_ok))) {
-      //closed without problems
-      ECUconnected = false;
-      ECUerror = 0:
-      ConnectionLED_OFF
-      ECUerrorLED_OFF
-
-    } else {
-
-    //not closed correctly
-    ECUconnected = false;
-    ECUerror = 2;
-    ECUerrorLED_ON
-    ConnectionLED_OFF
-    }
-  */
-
-  _kline->end();
-
-  _ECUstate = false;
-  _ECUerror = 0;
-  //ConnectionLED_OFF
-  //ECUerrorLED_OFF
-
-  //delay(3000);  //ECU ignores requests for 2 seconds after an error appear todo
-  return 1;
-}
-
-void KWP2000::requestSensorData(){
-  //if suzuki
-  sendRequest(requestSens,sizeof(requestSens));
-  listenResponse(storeArray);
-  processSensorData(storeArray, sizeof(storeArray));
-  //return 1,-1
-  //if kawasaki
-  //...
-}
-
-//this function send a request to the ECU
-//toSend = buffer to send (request)
-//sendlen = number of elements in the request
-int8_t KWP2000::sendRequest(const uint8_t toSend[], const uint8_t sendlen) {
-
-  for (uint8_t i = 0; i < sendlen; i++) {
-
-    _kline->write(toSend[i]);
-
-    if (_debug_level == DEBUG_LEVEL_VERBOSE) {
-        if (i == 0) _debug->println("Sending:");
-        _debug->println(toSend[i], HEX);             //human readable values
+        //check if i send the correct bytes
+        if (to_send[i] != echo)
+        {
+            setError(EE_ECHO);
+        }
+        delay(ISO_BYTE_DELAY);
     }
 
-    delay(ISO_BYTE_DELAY);
+    if (use_delay == true)
+    {
+        delay(ISO_DELAY_BETWEN_REQUEST);
+    }
+}
 
-    if (_debug_level == DEBUG_LEVEL_VERBOSE) { 
-    //check if i send the correct bytes
-        if (toSend[i] != _kline->read()) {
-          bitSet (_ECUerror, EE_ECHO);
+void KWP2000::listenResponse(uint8_t data[], uint8_t *resp_len, const uint8_t use_delay)
+{
+    //*resp_len              //total bytes that will be received (header+response+checksum)
+    uint8_t incoming;        //incoming byte from the ECU
+    uint8_t n_byte = 0;      //actual lenght of the response, updated every times a new byte is received
+    uint8_t data_to_rcv = 0; //data to receive: bytes of the response that have to be received (not received yet)
+    uint8_t data_rcvd = 0;   //data received: bytes of the response already received
+    uint8_t checksum = 0;    //the checksum
+
+    uint8_t response_completed = false; //when true no more bytes will be received
+    memset(data, 0, LEN(start_com) * maxLen); //empy the array
+    _last_data_received = millis(); //check times for the timeout
+    while ((millis() - _last_data_received < ISO_MAX_SEND_TIME) && (response_completed == false))
+    {
+        Serial.println("listen - 0");
+ 
+        if (_kline->available() > 0)
+        {
+            Serial.println("listen - 1");
+            incoming = _kline->read();
+            Serial.println("listen - 2");
+            data[n_byte] = incoming;
+
+            if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+            {
+                if (n_byte == 0)
+                {
+                    _debug->println("Receiving:");
+                }
+                _debug->print(incoming, HEX);
+            }
+
+            _last_data_received = millis(); //reset the timer for each byte received
+
+            //the ECU waits 10 milliseconds between sending two sequential bytes
+            //we use this time to analyze what we received
+
+            switch (n_byte)
+            {
+            case 0: //first byte should be an addres packet 0x80 or 0x81
+                if (incoming == 0x81)
+                {
+                    data_to_rcv = 1; //single byte packet from the ECU
+                }
+                else if (incoming == 0x80)
+                {
+                    data_to_rcv = 0; //the packet contains more than 1 byte
+                }
+                else
+                {
+                    setError(EE_HEADER);
+                    if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+                    {
+                        _debug->print(" - unknown header");
+                    }
+                }
+                break;
+
+            case 1: //second byte should be the target address
+
+                if (incoming != TESTER_addr) //the ECU is not talking with us
+                {
+                    setError(EE_TO);
+                    //show this target addres (I'm not jealous it's just curiosity)
+                    if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+                    {
+                        _debug->print(" - ECU is communicating with this");
+                    }
+                }
+                break;
+
+            case 2: //third byte should be the sender address
+
+                if (incoming != ECU_addr) //if you have a power commander or similar it could send some request to the ECU
+                {
+                    setError(EE_FROM); //ignore the packet if it doesn't came from the ECU
+                    //check who sent it
+                    if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+                    {
+                        _debug->print(" - this is communicating with the ECU");
+                    }
+                }
+                break;
+
+            case 3: //it should be the number of byte that I will receive, or the response if its a single byte packet (0x81)
+
+                if (data_to_rcv == 1) //header 0x81
+                {
+                    data_rcvd = 1; //all the data has been received
+                }
+                else if (data_to_rcv == 0) //header 0x80
+                {
+                    data_to_rcv = incoming; //number of byte of data in the packet.
+                }
+                break;
+
+            default: //finally the data and/or the checksum
+
+                if (data_to_rcv != data_rcvd) //there is still data
+                {
+                    data_rcvd++;
+                }
+                else //its the checksum
+                {
+                    response_completed = true;
+                    *resp_len = n_byte;
+
+                    if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+                    {
+                        _debug->println("\nEnd of response");
+                        _debug->print("bytes received: ");
+                        _debug->println(*resp_len);
+                    }
+
+                    checksum = calc_checksum(data, n_byte);
+                    if (checksum == incoming)
+                    {
+                        //the checksum is correct and everything went well!
+                        if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+                        {
+                            _debug->print("Correct checksum");
+                        }
+                    }
+                    else
+                    {
+                        //the checksum is not correct
+                        if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+                        {
+                            _debug->print("Wrong checksum, expected: ");
+                            _debug->print(checksum, HEX);
+                        }
+                        setError(EE_CS);
+                    }
+                }
+                break;
+            }
+
+            //new line
+            if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->println();
+            }
+            n_byte++; //read the next byte of the response
         }
     }
-  }
 
-  //delay(ISORequestDelay); I know that I should write it
-  //but I would rather to use this time to accomplish other task
-  return 1;
-}
-
-void KWP2000::listenResponse(uint8_t arr[]) {
-
-  //this function generate an array filled with the ECU response
-  //meanwhile it makes sure that the data are correct and for us
-  //todo use pointer, more elegant and better
-
-  uint8_t responsebyte = 0;       //actual lenght of the response, updated every times a new byte is received
-  uint8_t lastbyte = 0;           //#n of the last byte from the ECU
-  uint8_t in;                     //incoming byte
-  uint8_t dataToRcv = 0;          //bytes of the response that have to be received (not received yet)
-  uint8_t dataRcvd = 0;           //bytes of the response already received
-  uint8_t checksum = 0;           //the checksum
-  boolean forMe = false;          //initialize value, it is to be sure that the packet is address to us
-  boolean fromECU = false;        //initialize value, it is to be sure that the packet is from the ECU
-
-  uint8_t toReceive[maxLen];         //maxLen should be 61 in suzuki
-  memset(toReceive, 0, maxLen);   //empy the array
-
-  uint32_t startTime = millis();     //check times for the timeout
-
-  while (((millis() - startTime) < ISO_MAX_SEND_TIME) && lastbyte == 0) {
-
-    if (_kline->available() > 0) {
-
-      in = _kline->read();
-      toReceive[responsebyte] = in;
-
-  if (_debug_level == DEBUG_LEVEL_VERBOSE) { 
-    if (responsebyte == 0) Serial.println("Receiving:");
-    Serial.println(in, HEX);
-  }
-
-      startTime = millis(); //reset the timer for each byte received
-
-      //the ECU waits 10 milliseconds between two byte so analize the byte that we received
-
-      switch (responsebyte) {
-
-        case 0: //first byte should be an addres packet 0x80 or 0x81
-
-          if (in == 0x81) {
-            dataToRcv = 1; //single byte packet from the ECU
-          }
-          else if (in == 0x80) {
-            dataToRcv = 0;  //the packet contains more than 1 byte
-          }
-
-          break;
-
-        case 1:  //second byte should be the target address
-
-          if (in == TESTERaddr) {
-            forMe = true;
-          }
-          else {
-            bitSet (_ECUerror, EE_TO);        //ignore the packet if it isn't for us
-            forMe = false;
-          }
-          //show this target addres (I'm not jealous it's just curiosity)
-          //Serial << "addres: " << in << newl;
-
-          break;
-
-        case 2: //third byte should be the sender address
-
-          if (in == ECUaddr) {
-            fromECU = true;
-          }
-          else {
-            bitSet (_ECUerror, EE_FROM);       //ignore the packet if it doesn't came from the ECU
-            fromECU = false;
-          }
-          //if you have a power commander or similar it could send some request to the ECU
-
-          break;
-
-        case 3: //it should be the number of byte that I will receive, or the response if its a single byte packet (0x81)
-
-          if (forMe == true && fromECU == true) {
-            if (dataToRcv == 1) {             //header 0x81
-              dataRcvd = 1;
-            } else if (dataToRcv == 0) {      //header 0x80
-              dataToRcv = in;                 //number of byte of data in the packet.
-            }
-          }
-
-          break;
-
-        default:  //finally the data and/or the checksum
-
-          if (forMe == true && fromECU == true) {
-
-            if (dataToRcv != dataRcvd) {
-              dataRcvd++;
-            }
-            else {                          //its the checksum
-              lastbyte = responsebyte;
-              checksum = calc_checksum(toReceive, responsebyte);
-              if (checksum == in) {
-                ; //the checksum is correct and everything went well!
-              }
-              else {
-                bitSet (_ECUerror, EE_CS);  //the checksum is not correct
-              }
-            }
-          }
-          break;
-      }
-      responsebyte++;          //read the next byte of the response
+    if (use_delay == true)
+    {
+        delay(ISO_DELAY_BETWEN_REQUEST);
     }
-  }
+}
 
-  for (uint8_t i = 0; i <= lastbyte; i++) {
-    storeArray[i] = toReceive[i];           //populate the array
-  }
+int8_t KWP2000::requestSensorData()
+{
+#if defined(SUZUKI)
 
-  //delay(ISORequestDelay); as before we use this time to do other things
+    sendRequest(request_sens, LEN(request_sens));
+    listenResponse(_pArray, &_pArray_len);
 
+#elif defined(KAWASAKI)
 
-  if (_debug_level == DEBUG_LEVEL_VERBOSE){
-    Serial.println("\nFrom the ECU:");
-    Serial.print("number of bytes\t\t"); Serial.println(lastbyte);
-    Serial.print("expected checksum\t"); Serial.println(checksum, HEX);
-    Serial.println("");
-
-    Serial.println("Received:");
-    for (int i = 0; i < lastbyte; i++) {
-      Serial.print(i); Serial.print("\t"); Serial.println(storeArray[i], HEX);
+    for (uint8_t request = 0; request < LEN(request_sens); request++)
+    {
+        sendRequest(request_sens[request], LEN(request_sens[request][0]));
+        listenResponse(_pArray, &_pArray_len);
+        //increase addres of _pArray
     }
-    Serial.println();
-  }
+
+#elif defined(HONDA)
+
+    //no idea
+
+#endif
+
+    //Speed
+    _SPEED = _pArray[PID_SPEED] * 2;
+
+    //RPM (Rights Per Minutes) it is split between two byte
+    _RPM = _pArray[PID_RPM_H] * 10 + _pArray[PID_RPM_L] / 10;
+
+    //TPS (Throttle Position Sensor)
+    _TPS = 125 * (_pArray[PID_TPS] - 55) / (256 - 55);
+
+    //IAP (Intake Air Pressure)
+    _IAP = _pArray[PID_IAP] * 4 * 0.136;
+
+    //ECT (Engine Coolant Temperature)
+    _ECT = (_pArray[PID_ECT] - 48) / 1.6;
+
+    //IAT (intake Air Temperature)
+    _IAT = (_pArray[PID_IAT] - 48) / 1.6;
+
+    //STPS (Secondary Throttle Position Sensor)
+    _STPS = _pArray[PID_STPS] / 2.55;
+
+    //GEAR
+    _GEAR1 = _pArray[PID_GPS];
+    _GEAR2 = _pArray[PID_CLUTCH];
+    _GEAR3 = _pArray[PID_GEAR_3];
+    //_GEAR = ?
+
+    //GPS (Gear Position Sensor)
+
+    /*
+        other sensors
+
+        //voltage?
+        voltage = _pArray[32] * 100 / 126;
+
+        //FUEL 40-46
+
+        //IGN 49-52
+
+        //STVA
+        STVA = _pArray[54] * 100 / 255;
+
+        //pair
+        PAIR = _pArray[59];
+        */
+
+    if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+    {
+        _debug->println("Sensor data:");
+        _debug->print("Speed\t");
+        _debug->println(_SPEED);
+        _debug->print("RPM\t");
+        _debug->println(_RPM);
+        _debug->print("TPS\t");
+        _debug->println(_TPS);
+        _debug->print("IAP\t");
+        _debug->println(_IAP);
+        _debug->print("ECT\t");
+        _debug->println(_ECT);
+        _debug->print("IAT\t");
+        _debug->println(_IAT);
+        _debug->print("STPS\t");
+        _debug->println(_STPS);
+
+        _debug->print("GEAR1\t");
+        _debug->println(_GEAR1, BIN);
+        _debug->print("GEAR2\t");
+        _debug->println(_GEAR2, BIN);
+        _debug->print("GEAR3\t");
+        _debug->println(_GEAR3, BIN);
+        //todo
+        _debug->println("");
+    }
+    return 1;
 }
 
-void KWP2000::processSensorData(const uint8_t data[], const uint8_t dataLen) {
+int8_t KWP2000::initKline()
+{
+    if (_sequence_started == false)
+    {
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+        {
+            _debug->println("Initialize K-line");
+        }
 
-  //Speed
-  _SPEED = data[PID_SPEED] * 2;
+        if (_pArray_is_allocated == false)
+        {
+            _pArray = new /*(std::nothrow)*/ uint8_t[maxLen];//mdf
+            _pArray_is_allocated = true;
+        }
+        if (_pArray == nullptr)
+        {
+            setError(EE_MEMORY);
+            return -1;
+        }
 
-  //RPM (Rights Per Minutes) it is split between two byte
-  _RPM = data[PID_RPM_H] * 10 +  data[PID_RPM_L] / 10;
-  //RPM = (data[PID_RPM_H]*256 + data[PID_RPM_L]) / 2.56 which one?
+        _kline->end();
+        pinMode(_k_out_pin, OUTPUT);
+        _sequence_started = true;
+        _start_time = millis();
+        _time_elapsed = 0;
+    }
+    _time_elapsed = millis() - _start_time;
 
-  //TPS (Throttle Position Sensor)
-  _TPS = 125 * (data[PID_TPS] - 55) / (256 - 55);
+    if (_time_elapsed < ISO_START_TIME)
+    {
+        digitalWrite(_k_out_pin, HIGH);
+        return 0;
+    }
+    else if (_time_elapsed >= ISO_START_TIME && _time_elapsed < ISO_START_TIME + 25)
+    {
+        digitalWrite(_k_out_pin, LOW);
+        return 0;
+    }
+    else if (_time_elapsed >= ISO_START_TIME + 25 && _time_elapsed < ISO_START_TIME + 50)
+    {
+        digitalWrite(_k_out_pin, HIGH);
+        return 0;
+    }
+    else if (_time_elapsed >= ISO_START_TIME + 50)
+    {
+        _sequence_started = false;
+        if (_debug_level != DEBUG_LEVEL_NO_BIKE)
+        {
+            _kline->begin(_kline_baudrate);
+        }
+        delay(5); //todo how much?
 
-  //IAP (Intake Air Pressure)
-  _IAP = data[PID_IAP] * 4 * 0.136;
+        sendRequest(start_com, LEN(start_com));
+        listenResponse(_pArray, &_pArray_len);
 
-  //ECT (Engine Coolant Temperature)
-  _ECT = (data[PID_ECT] -  48) / 1.6;
-
-  //IAT (intake Air Temperature)
-  _IAT = (data[PID_IAT] -  48) / 1.6;
-
-  //STPS (Secondary Throttle Position Sensor)
-  _STPS = data[PID_STPS] / 2.55;
-
-  //GEAR
-  _GEAR1 = data[PID_GPS];
-  _GEAR2 = data[PID_CLUTCH];
-  _GEAR3 = data[PID_GEAR_3];
-  //_GEAR = ?
-
-  //GPS (Gear Position Sensor)
-
-  /*
-    other sensors
-
-    //voltage?
-    voltage = data[32] * 100 / 126;
-
-    //FUEL 40-46
-
-    //IGN 49-52
-
-    //STVA
-    STVA = data[54] * 100 / 255;
-
-    //pair
-    PAIR = data[59];
-  */
-
-  if (_debug_level > DEBUG_LEVEL_VERBOSE){
-    Serial.println("PROCESS data");
-    Serial.print("speed\t"); Serial.println(_SPEED);
-    Serial.print("RPM\t"); Serial.println(_RPM);
-    Serial.print("TPS\t"); Serial.println(_TPS);
-    Serial.print("IAP\t"); Serial.println(_IAP);
-    Serial.print("ECT\t"); Serial.println(_ECT);
-    Serial.print("IAT\t"); Serial.println(_IAT);
-    Serial.print("STPS\t"); Serial.println(_STPS);
-    Serial.print("GEAR1\t"); Serial.println(_GEAR1, BIN);
-    Serial.print("GEAR2\t"); Serial.println(_GEAR2, BIN);
-    Serial.print("GEAR3\t"); Serial.println(_GEAR3, BIN);
-    Serial.print("MORE...\t");
-    Serial.println("");
-  }
+        if (compareResponse(start_com_ok, _pArray, LEN(start_com_ok)) == true)
+        {
+            if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+            {
+                _debug->println("ECU connected");
+            }
+            _ECU_status = true;
+            _ECU_error = 0;
+            return 1;
+        }
+        else
+        {
+            if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+            {
+                _debug->println("initialization failed");
+            }
+            _ECU_status = false;
+            setError(EE_START);
+            return -2;
+        }
+    }
+    //the program should never arrive here
+    setError(EE_UNEX);
+    return -3;
 }
 
-void KWP2000::keepAlive(){
+int8_t KWP2000::stopKline()
+{
+    if (_sequence_started == false)
+    {
+        _sequence_started = true;
 
+        /*
+        todo is there any sequence or I just close and wait?
+        sendRequest(close_com, LEN(close_com));
+
+        if (compareResponse(close_com_ok, _pArray, LEN(close_com_ok)) == true) {
+        //closed without problems
+        _ECU_status = false;
+        _ECU_error = 0:
+        }
+        else
+        {
+        //not closed correctly
+        _ECU_status = false;
+        setError(EE_STOP);
+        }
+        */
+
+        delete[] _pArray;
+        _pArray_is_allocated = false;
+        _kline->end();
+        _ECU_status = false;
+        _ECU_error = 0;
+
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+        {
+            _debug->println("ECU disconnected");
+        }
+        _start_time = millis();
+        _time_elapsed = 0;
+    }
+
+    _time_elapsed = millis() - _start_time;
+
+    if (_time_elapsed < 2000) //ECU ignores requests for 2 seconds after an error appear
+    {
+        return 0;
+    }
+    else
+    {
+        _sequence_started = false;
+        return 1;
+    }
 }
 
+void KWP2000::keepAlive(uint16_t time)
+{
+    if (time > ISO_KEEP_ALIVE) //prevent stupid errors
+    {
+        time = ISO_KEEP_ALIVE;
+    }
+
+    if (millis() - _last_data_received >= time)
+    {
+
+#if defined(SUZUKI)
+        //todo find a shorter request
+        sendRequest(request_sens, LEN(request_sens));
+#elif defined(KAWASAKI)
+        sendRequest(request_sens[0], LEN(request_sens[0][0]));
+#endif
+    }
+}
 
 /////////////////// PRINT and GET ///////////////////////
 
-void KWP2000::printStatus(){
-  
-  //how to check if debug enabled?
-   if (_debug_level >= DEBUG_LEVEL_DEFAULT) {
-    _debug->print("\n---- STATUS ----\n");
-    _debug->print("Connection:\t");
-    _debug->println(_ECUstate == 1 ? "Connected" : "Not connected");
-    _debug->print("Errors:\t\t");
-    _debug->println(_ECUerror != 0 ? "Yes" : "No");
-    //serial ports used
-    //other stuff
+void KWP2000::printStatus()
+{
 
-    _debug->print("---- ------- ----\n");
-   }
-}
+    //how to check if debug enabled?
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->print("\n---- STATUS ----\n");
+        _debug->print("Connection:\t");
+        _debug->println(_ECU_status == 1 ? "Connected" : "Not connected");
+        _debug->print("Errors:\t\t");
+        _debug->println(_ECU_error != 0 ? "Yes" : "No");
+        //serial ports used
+        //other stuff
 
-void KWP2000::printError(){
-  if (_debug_level >= DEBUG_LEVEL_DEFAULT) {
-     _debug->print("\n---- ERRORS ----\n");
-    if (_ECUerror == 0){
-      _debug->println("no errors");
-    } else {
-      for (uint8_t i = 0; i < 8; i++){
-        if (bitRead(_ECUerror, i) != 0){
-          switch(i){
-            case EE_START:
-              _debug->println("unable to start comunication");
-              break;
-            case EE_STOP:
-              _debug->println("unable to stop comunication");
-              break;
-            case EE_TO:
-              _debug->println("data is not for us");
-              break;
-            case EE_FROM:
-              _debug->println("data don't came from the ECU");
-              break;
-            case EE_CS:
-              _debug->println("checksum error");
-              break;
-            case EE_ECHO:
-              _debug->println("echo error");
-              break;
-            default:
-              _debug->println("???");
-              break;
-          }
-        }
-      }
+        _debug->print("---- ------- ----\n");
     }
-    _debug->print("---- ------- ----\n");
-  }
 }
 
-int8_t KWP2000::getState(){
-  return _ECUstate;
+void KWP2000::printError()
+{
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->print("\n---- ERRORS ----\n");
+        if (_ECU_error == 0)
+        {
+            _debug->println("no errors");
+        }
+        else
+        {
+            for (uint8_t i = 0; i < 8; i++)
+            {
+                if (bitRead(_ECU_error, i) != 0)
+                {
+                    switch (i)
+                    {
+                    case EE_START:
+                        _debug->println("unable to start comunication");
+                        break;
+                    case EE_STOP:
+                        _debug->println("unable to stop comunication");
+                        break;
+                    case EE_TO:
+                        _debug->println("data is not for us");
+                        break;
+                    case EE_FROM:
+                        _debug->println("data don't came from the ECU");
+                        break;
+                    case EE_CS:
+                        _debug->println("checksum error");
+                        break;
+                    case EE_ECHO:
+                        _debug->println("echo error");
+                        break;
+                    case EE_MEMORY:
+                        _debug->println("memory error");
+                        break;
+                    case EE_UNEX:
+                        _debug->println("unexpected error");
+                        break;
+                    case EE_HEADER:
+                        _debug->println("unexpected header");
+                        break;
+                    default:
+                        _debug->println("did I forget any enum?");
+                        break;
+                    }
+                }
+            }
+        }
+        _debug->print("---- ------- ----\n");
+    }
 }
 
-int8_t KWP2000::getError(){
-  return _ECUerror;
+int8_t KWP2000::getStatus()
+{
+    return _ECU_status;
 }
 
-void KWP2000::resetError(){
-  _ECUerror = 0;
+int8_t KWP2000::getError()
+{
+    return _ECU_error;
 }
 
-uint8_t KWP2000::getGear(){
-  return _GEAR;
+void KWP2000::resetError()
+{
+    _ECU_error = 0;
 }
 
-uint8_t KWP2000::getRPM(){
-  return _RPM;
+uint8_t KWP2000::getGear()
+{
+    return _GEAR;
 }
 
-uint8_t KWP2000::getSpeed(){
-  return _SPEED;
+uint8_t KWP2000::getRPM()
+{
+    return _RPM;
 }
 
-uint8_t KWP2000::getTPS(){
-  return _TPS;
+uint8_t KWP2000::getSpeed()
+{
+    return _SPEED;
 }
 
-uint8_t KWP2000::getIAP(){
-  return _IAP;
+uint8_t KWP2000::getTPS()
+{
+    return _TPS;
 }
 
-uint8_t KWP2000::getECT(){
-  return _ECT;
+uint8_t KWP2000::getIAP()
+{
+    return _IAP;
 }
 
-uint8_t KWP2000::getSTPS(){
-  return _STPS;
+uint8_t KWP2000::getECT()
+{
+    return _ECT;
 }
 
+uint8_t KWP2000::getSTPS()
+{
+    return _STPS;
+}
 
 /////////////////// PRIVATE ///////////////////////
 
-//Checksum is the sum of all data bytes modulo (&) 0xFF
-//(same as being truncated to one byte)
-uint8_t KWP2000::calc_checksum(const uint8_t data[], const uint8_t len) {
-  uint8_t cs = 0;
-
-  for (uint8_t i = 0; i < len; i++) {
-    cs += data[i];
-    Serial.println(cs);
-  }
-  return cs;
+void KWP2000::setError(uint8_t error)
+{
+    bitSet(_ECU_error, error);
 }
 
-int8_t KWP2000::compareResponse (const uint8_t expectedResponse[], const uint8_t receivedResponse[], const uint8_t expectedResponseLen) {
-  uint8_t coincident = 0;
-  coincident = memcmp(expectedResponse, receivedResponse, expectedResponseLen);
+//Checksum is the sum of all data bytes modulo (&) 0xFF
+//(same as being truncated to one byte)
+uint8_t KWP2000::calc_checksum(const uint8_t data[], const uint8_t cs_len)
+{
+    uint8_t cs = 0;
 
-  if (coincident == 0) {
-    return 1;
-  } else {
-    bitSet (_ECUerror, EE_CS);
-    return -1;
-  }
+    for (uint8_t i = 0; i < cs_len; i++)
+    {
+        cs += data[i];
+    }
+    return cs;
+}
+
+int8_t KWP2000::compareResponse(const uint8_t expected_response[], const uint8_t received_response[], const uint8_t expected_response_len)
+{
+    uint8_t coincident = -1;
+    coincident = memcmp(expected_response, received_response, expected_response_len);
+
+    if (coincident == 0)
+    {
+        return 1;
+    }
+    else
+    {
+        setError(EE_CS);
+        return -1;
+    }
 }
