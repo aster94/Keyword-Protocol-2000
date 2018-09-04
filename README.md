@@ -46,14 +46,6 @@ find more tester
 
 ## Version - Change Log
 
-##### 1.0.0 - 
-- version promoted for the arduino IDE, no changes
-
-##### 0.3.0 - 
-- ESP32 team corrected the bug, thank you!
-- test on the field passed
-- add documentation
-
 ##### 0.2.0 - Aug 30, 2018
 - found bug in the hardwareSerial class of the ESP32 core
 - big cleaning of the code
