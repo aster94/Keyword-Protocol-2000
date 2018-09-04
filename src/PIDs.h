@@ -18,6 +18,7 @@
 
 
 
+
 #if defined(GSXR_600_2011)
 uint8_t format = 0x80;
 const uint8_t ECU_addr = 0x12;

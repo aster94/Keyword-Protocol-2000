@@ -22,10 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include "PIDs.h"
 #include <new>//mdf
 
-#ifdef DEBUG_BT
-#include "BluetoothSerial.h"
-#endif
-
 #define LEN(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
 
 ////////////// SETUP ////////////////
@@ -37,19 +33,7 @@ KWP2000::KWP2000(HardwareSerial *kline_serial, const uint32_t kline_baudrate, co
     _k_out_pin = k_out_pin;
     _model = model;
 }
-#ifdef DEBUG_BT
-void KWP2000::enableDebug(BluetoothSerial *debug_serial, const String device_name, const uint8_t debug_level)
-{
-    _debug = debug_serial;
-    _debug->begin(device_name);
-    _debug_level = debug_level;
 
-    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-    {
-        _debug->println("Debug enabled");
-    }
-}
-#else
 void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint32_t debug_baudrate, const uint8_t debug_level)
 {
     _debug = debug_serial;
@@ -61,7 +45,6 @@ void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint32_t debug_bau
         _debug->println("Debug enabled");
     }
 }
-#endif
 
 void KWP2000::disableDebug()
 {

@@ -30,11 +30,6 @@ add F before all serial buffer?
 
 #include "Arduino.h"
 
-//#define DEBUG_BT
-
-#ifdef DEBUG_BT
-#include "BluetoothSerial.h"
-#endif
 
 // These values are defined by the ISO protocol
 #define ISO_BYTE_DELAY 10
@@ -119,11 +114,8 @@ class KWP2000
     uint8_t _pArray_len = maxLen;
     uint8_t _pArray_is_allocated = false;
 
-#ifdef DEBUG_BT
-    BluetoothSerial *_debug;
-#else
+
     HardwareSerial *_debug;
-#endif
     uint32_t _debug_baudrate;
     uint8_t _debug_level = DEBUG_LEVEL_NONE;
     uint8_t _ECU_status = false;

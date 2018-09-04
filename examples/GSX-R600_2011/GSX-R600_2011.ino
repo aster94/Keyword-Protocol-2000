@@ -1,15 +1,7 @@
 #include "KWP2000.h"
-
-#ifdef DEBUG_BT
-#include "BluetoothSerial.h"
-#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
-#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
-#endif
-BluetoothSerial debug;
-#else
 #include <HardwareSerial.h>
 HardwareSerial suzuki(2);
-#endif
+
 
 KWP2000 SDS(&suzuki, 115200, 22, 1);
 
