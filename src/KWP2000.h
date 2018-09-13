@@ -35,8 +35,10 @@ add F before all serial buffer?
 #define ISO_BYTE_DELAY 10
 #define ISO_MAX_SEND_TIME 2000
 #define ISO_DELAY_BETWEN_REQUEST 40
-#define ISO_KEEP_ALIVE 2000
 #define ISO_START_TIME 2000
+#define ISO_CONNECTION_LOST 2000
+
+#define KEEP_ALIVE 1000
 
 // debug level, todo enum
 #define DEBUG_LEVEL_NO_BIKE 15
@@ -65,21 +67,16 @@ class KWP2000
     // SETUP
     KWP2000(HardwareSerial *kline_serial, const uint32_t kline_baudrate, const uint8_t k_out_pin, const uint8_t model);
 
-#ifdef DEBUG_BT
-    void enableDebug(BluetoothSerial *debug_serial, const String device_name, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT);
-#else
     void enableDebug(HardwareSerial *debug_serial, const uint32_t debug_baudrate = 115200, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT);
-#endif
-
     void disableDebug();
     void setDebugLevel(const uint8_t debug_level);
     void enableDealerMode(const uint8_t dealer_pin);
     void dealerMode(const uint8_t dealer_mode);
 
     // COMMUNICATION
-    void sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t use_delay = false);
-    void listenResponse(uint8_t data[], uint8_t *resp_len, const uint8_t use_delay = false);
-    int8_t requestSensorData();
+    void sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t wait_to_send_all = false, const uint8_t use_delay = false);
+    void listenResponse(uint8_t *resp = nullptr, uint8_t *resp_len = nullptr, const uint8_t use_delay = false);
+    void requestSensorData();
     int8_t initKline();
     int8_t stopKline();
     void keepAlive(uint16_t time = 1000);
@@ -108,10 +105,10 @@ class KWP2000
     uint8_t _dealer_pin;
 
     uint8_t _sequence_started = false;
-    uint64_t _start_time = 0;
-    uint64_t _time_elapsed = 0;
+    uint32_t _start_time = 0;
+    uint32_t _time_elapsed = 0;
     uint8_t *_pArray;
-    uint8_t _pArray_len = maxLen;
+    uint8_t _pArray_len;
     uint8_t _pArray_is_allocated = false;
 
 
@@ -120,13 +117,13 @@ class KWP2000
     uint8_t _debug_level = DEBUG_LEVEL_NONE;
     uint8_t _ECU_status = false;
     uint8_t _ECU_error = 0;
-    uint64_t _last_data_received;
+    uint32_t _last_correct_response = 0;
 
     uint8_t _GEAR, _RPM, _SPEED, _TPS, _IAP, _ECT, _STPS;
     uint8_t _GEAR1, _GEAR2, _GEAR3, _IAT;
 
     // private functions
-    void setError(uint8_t error);
+    void setError(const uint8_t error);
     uint8_t calc_checksum(const uint8_t data[], const uint8_t len);
     int8_t compareResponse(const uint8_t expectedResponse[], const uint8_t receivedResponse[], const uint8_t expectedResponseLen);
 };

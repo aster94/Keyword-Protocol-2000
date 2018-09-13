@@ -36,6 +36,7 @@ This function generate an array filled with the ECU response, meanwhile it makes
 
 ### keepAlive
 After 2 seconds of inactivity the comunication with the ECU would be lost so we keep it alive
+it shouldn't be less than 40 milliseconds and have to be under 2 seconds or the comunication with the ECU would be lost
 
 ### get*
 
@@ -46,8 +47,20 @@ find more tester
 
 ## Version - Change Log
 
+##### 0.4.0 - ?
+- made a decent example sketch
+- add documentation
+- review all the code
+- add ECU_Emulator written in python
+
+##### 0.3.0 - Sep 13, 2018
+- solved the bug with FreeRTOS
+- moved the BT serial in a fork
+- added wonderful code to manage comunication errors
+- ready for the road test :D
+
 ##### 0.2.0 - Aug 30, 2018
-- found bug in the hardwareSerial class of the ESP32 core
+- problem with FreeRTOS 
 - big cleaning of the code
 - removed all the blocking code
 - added BT serial

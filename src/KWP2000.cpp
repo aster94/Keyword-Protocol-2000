@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include "Arduino.h"
 #include "KWP2000.h"
 #include "PIDs.h"
-#include <new>//mdf
+#include <new>
 
 #define LEN(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
 
@@ -83,15 +83,14 @@ void KWP2000::dealerMode(const uint8_t dealer_mode)
 
 ////////////// COMMUNICATION ////////////////
 
-void KWP2000::sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t use_delay)
+void KWP2000::sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t use_delay, const uint8_t wait_to_send_all)
 {
     uint8_t echo = 0;
     for (uint8_t i = 0; i < send_len; i++)
     {
-
         _kline->write(to_send[i]);
+        
         //too few time? todo
-
         if (_kline->available() > 0)
         {
             echo = _kline->read();
@@ -101,10 +100,10 @@ void KWP2000::sendRequest(const uint8_t to_send[], const uint8_t send_len, const
         {
             if (i == 0)
             {
-                _debug->println("Sending - Echo");
+                _debug->println("\nSending - Echo");
             }
             _debug->print(to_send[i], HEX); //human readable values
-            _debug->print(" - ");
+            _debug->print("\t-\t");
             _debug->println(echo, HEX);
         }
 
@@ -116,45 +115,72 @@ void KWP2000::sendRequest(const uint8_t to_send[], const uint8_t send_len, const
         delay(ISO_BYTE_DELAY);
     }
 
+    if (wait_to_send_all == true)
+    {
+        _kline->flush();
+    }
+
     if (use_delay == true)
     {
         delay(ISO_DELAY_BETWEN_REQUEST);
+        //todo smart delay
     }
 }
 
-void KWP2000::listenResponse(uint8_t data[], uint8_t *resp_len, const uint8_t use_delay)
+//*resp_len              //total bytes that will be received (header+response+checksum)
+void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use_delay)
 {
-    //*resp_len              //total bytes that will be received (header+response+checksum)
-    uint8_t incoming;        //incoming byte from the ECU
-    uint8_t n_byte = 0;      //actual lenght of the response, updated every times a new byte is received
-    uint8_t data_to_rcv = 0; //data to receive: bytes of the response that have to be received (not received yet)
-    uint8_t data_rcvd = 0;   //data received: bytes of the response already received
-    uint8_t checksum = 0;    //the checksum
-
-    uint8_t response_completed = false; //when true no more bytes will be received
-    memset(data, 0, LEN(start_com) * maxLen); //empy the array
-    _last_data_received = millis(); //check times for the timeout
-    while ((millis() - _last_data_received < ISO_MAX_SEND_TIME) && (response_completed == false))
+    //assign pointer to address if this function is called without arguments
+    if (resp == nullptr)
     {
-        Serial.println("listen - 0");
- 
+        resp = _pArray;
+        if (resp == nullptr)
+        {
+            setError(EE_MEMORY);
+        }
+    }
+
+    if (resp_len == nullptr)
+    {
+        resp_len = &_pArray_len;
+        if (resp_len == nullptr)
+        {
+            setError(EE_MEMORY);
+        }
+    }
+
+    //empy the array
+    for (uint8_t i = 0; i < maxLen; ++i)
+    {
+        resp[i] = 0;
+    }
+
+    uint8_t response_completed = false;     //when true no more bytes will be received
+    uint8_t incoming;                       //incoming byte from the ECU
+    uint8_t n_byte = 0;                     //actual lenght of the response, updated every times a new byte is received
+    uint8_t data_to_rcv = 0;                //data to receive: bytes of the response that have to be received (not received yet)
+    uint8_t data_rcvd = 0;                  //data received: bytes of the response already received
+    uint8_t checksum = 0;                   //the checksum
+    uint32_t last_data_received = millis(); //check times for the timeout
+
+    while ((millis() - last_data_received < ISO_MAX_SEND_TIME) && (response_completed == false))
+    {
+
         if (_kline->available() > 0)
         {
-            Serial.println("listen - 1");
             incoming = _kline->read();
-            Serial.println("listen - 2");
-            data[n_byte] = incoming;
+            resp[n_byte] = incoming;
 
             if (_debug_level >= DEBUG_LEVEL_VERBOSE)
             {
                 if (n_byte == 0)
                 {
-                    _debug->println("Receiving:");
+                    _debug->println("\nReceiving:");
                 }
                 _debug->print(incoming, HEX);
             }
 
-            _last_data_received = millis(); //reset the timer for each byte received
+            last_data_received = millis(); //reset the timer for each byte received
 
             //the ECU waits 10 milliseconds between sending two sequential bytes
             //we use this time to analyze what we received
@@ -188,7 +214,7 @@ void KWP2000::listenResponse(uint8_t data[], uint8_t *resp_len, const uint8_t us
                     //show this target addres (I'm not jealous it's just curiosity)
                     if (_debug_level >= DEBUG_LEVEL_VERBOSE)
                     {
-                        _debug->print(" - ECU is communicating with this");
+                        _debug->print(" - ECU is communicating with this address");
                     }
                 }
                 break;
@@ -231,18 +257,19 @@ void KWP2000::listenResponse(uint8_t data[], uint8_t *resp_len, const uint8_t us
 
                     if (_debug_level >= DEBUG_LEVEL_VERBOSE)
                     {
-                        _debug->println("\nEnd of response");
+                        _debug->println("\n\nEnd of response");
                         _debug->print("bytes received: ");
                         _debug->println(*resp_len);
                     }
 
-                    checksum = calc_checksum(data, n_byte);
+                    checksum = calc_checksum(resp, *resp_len);
                     if (checksum == incoming)
                     {
                         //the checksum is correct and everything went well!
                         if (_debug_level >= DEBUG_LEVEL_VERBOSE)
                         {
                             _debug->print("Correct checksum");
+                            _last_correct_response = millis();
                         }
                     }
                     else
@@ -272,21 +299,22 @@ void KWP2000::listenResponse(uint8_t data[], uint8_t *resp_len, const uint8_t us
     {
         delay(ISO_DELAY_BETWEN_REQUEST);
     }
+    resp_len = nullptr; //deferencing the pointer
 }
 
-int8_t KWP2000::requestSensorData()
+void KWP2000::requestSensorData()
 {
 #if defined(SUZUKI)
 
     sendRequest(request_sens, LEN(request_sens));
-    listenResponse(_pArray, &_pArray_len);
+    listenResponse();
 
 #elif defined(KAWASAKI)
 
     for (uint8_t request = 0; request < LEN(request_sens); request++)
     {
         sendRequest(request_sens[request], LEN(request_sens[request][0]));
-        listenResponse(_pArray, &_pArray_len);
+        listenResponse();
         //increase addres of _pArray
     }
 
@@ -344,7 +372,7 @@ int8_t KWP2000::requestSensorData()
 
     if (_debug_level >= DEBUG_LEVEL_VERBOSE)
     {
-        _debug->println("Sensor data:");
+        _debug->println("\nSensor data:");
         _debug->print("Speed\t");
         _debug->println(_SPEED);
         _debug->print("RPM\t");
@@ -369,7 +397,6 @@ int8_t KWP2000::requestSensorData()
         //todo
         _debug->println("");
     }
-    return 1;
 }
 
 int8_t KWP2000::initKline()
@@ -378,12 +405,12 @@ int8_t KWP2000::initKline()
     {
         if (_debug_level >= DEBUG_LEVEL_DEFAULT)
         {
-            _debug->println("Initialize K-line");
+            _debug->println("\nInitialize K-line");
         }
 
         if (_pArray_is_allocated == false)
         {
-            _pArray = new /*(std::nothrow)*/ uint8_t[maxLen];//mdf
+            _pArray = new (std::nothrow) uint8_t[maxLen]; //mdf
             _pArray_is_allocated = true;
         }
         if (_pArray == nullptr)
@@ -425,7 +452,7 @@ int8_t KWP2000::initKline()
         delay(5); //todo how much?
 
         sendRequest(start_com, LEN(start_com));
-        listenResponse(_pArray, &_pArray_len);
+        listenResponse();
 
         if (compareResponse(start_com_ok, _pArray, LEN(start_com_ok)) == true)
         {
@@ -478,6 +505,7 @@ int8_t KWP2000::stopKline()
 
         delete[] _pArray;
         _pArray_is_allocated = false;
+        _last_correct_response = 0;
         _kline->end();
         _ECU_status = false;
         _ECU_error = 0;
@@ -505,20 +533,34 @@ int8_t KWP2000::stopKline()
 
 void KWP2000::keepAlive(uint16_t time)
 {
-    if (time > ISO_KEEP_ALIVE) //prevent stupid errors
+    if (_ECU_status == true) //if it is not connected it is meaningless to send a request
     {
-        time = ISO_KEEP_ALIVE;
-    }
+        if (millis() - _last_correct_response >= ISO_START_TIME)
+        {
+            //probably the connection has been lost
+            _debug->println("are you still there?");
+            stopKline();
+            return;
+        }
 
-    if (millis() - _last_data_received >= time)
-    {
+        if (time > ISO_MAX_SEND_TIME) //prevent stupid errors
+        {
+            time = KEEP_ALIVE;
+        }
 
+        if (millis() - _last_correct_response >= time)
+        {
 #if defined(SUZUKI)
-        //todo find a shorter request
-        sendRequest(request_sens, LEN(request_sens));
+            //todo find a shorter request
+            sendRequest(request_sens, LEN(request_sens));
 #elif defined(KAWASAKI)
-        sendRequest(request_sens[0], LEN(request_sens[0][0]));
+            sendRequest(request_sens[0], LEN(request_sens[0][0]));
+#elif defined(HONDA)
+            sendRequest(request_sens, LEN(request_sens));
 #endif
+            //empty the buffer
+            listenResponse();
+        }
     }
 }
 
@@ -534,7 +576,11 @@ void KWP2000::printStatus()
         _debug->print("Connection:\t");
         _debug->println(_ECU_status == 1 ? "Connected" : "Not connected");
         _debug->print("Errors:\t\t");
-        _debug->println(_ECU_error != 0 ? "Yes" : "No");
+        _debug->println(_ECU_error == 0 ? "No" : "Yes");
+        _debug->print("last data:\t");
+        _debug->print(_last_correct_response == 0 ? "0" : String((millis() - _last_correct_response) / 1000.0, 2));
+        _debug->println(" seconds ago");
+
         //serial ports used
         //other stuff
 
@@ -649,7 +695,7 @@ uint8_t KWP2000::getSTPS()
 
 /////////////////// PRIVATE ///////////////////////
 
-void KWP2000::setError(uint8_t error)
+void KWP2000::setError(const uint8_t error)
 {
     bitSet(_ECU_error, error);
 }
