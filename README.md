@@ -22,6 +22,9 @@ Generally the function return `true` if everything went correct, a `negative num
 
 ## KWP2000 class
 
+constructor
+at pc use a different pin then the real tx
+
 ### initKline
 Initialize the comunication with the ECU
 
@@ -30,9 +33,11 @@ Close the comunication with the ECU
 
 ### sendRequest
 This function send a request to the ECU
+flush() takes about 15 microseconds
 
 ### listen
 This function generate an array filled with the ECU response, meanwhile it makes sure that the data are correct and for us
+Calling send or listen without inizializing the kline could bring to unpredictable crashes
 
 ### keepAlive
 After 2 seconds of inactivity the comunication with the ECU would be lost so we keep it alive
@@ -47,17 +52,22 @@ find more tester
 
 ## Version - Change Log
 
-##### 0.4.0 - ?
+##### 0.5.0 - ?
+- road test passed :D
+- added documentation
+
+##### 0.4.0 - Oct 9, 2018
 - made a decent example sketch
-- add documentation
+- added ECU_Emulator written in python
+- merged printStatus and printError
+- added printSensorData
 - review all the code
-- add ECU_Emulator written in python
+- added new errors and better error handling
 
 ##### 0.3.0 - Sep 13, 2018
 - solved the bug with FreeRTOS
 - moved the BT serial in a fork
 - added wonderful code to manage comunication errors
-- ready for the road test :D
 
 ##### 0.2.0 - Aug 30, 2018
 - problem with FreeRTOS 
