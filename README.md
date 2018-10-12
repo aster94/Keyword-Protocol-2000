@@ -22,8 +22,8 @@ Simply add this from the Arduino Library Manager or download this repository and
 ## Function Description
 Generally the functions return `true` if everything went correct, a `negative number` if there where any error, `false` if nothing changed
 
-## KWP2000 class
-#### KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint32_t kline_baudrate = 10400)
+# KWP2000 class
+### KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint32_t kline_baudrate = 10400)
 **Constructor:** choose the serial port which will be used to talk with the ECU and the TX pin of this serial
 
 *Optional:* baudrate of the kline
@@ -33,8 +33,8 @@ Example:
 
 
 
-### Setup
-#### enableDebug(HardwareSerial *debug_serial, const uint32_t debug_baudrate = 115200, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT)
+## Setup
+### enableDebug(HardwareSerial *debug_serial, const uint32_t debug_baudrate = 115200, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT)
 **Choose and enable the debug:** select the serial port which will be used to print useful messages
 
 *Optional:* baudrate, verbosity
@@ -43,7 +43,7 @@ Example:
 > ECU.enableDebug(Serial);
 
 
-#### setDebugLevel(const uint8_t debug_level)
+### setDebugLevel(const uint8_t debug_level)
 **Change the verbosity of the debug messages:** you could choose between:
 - DEBUG_LEVEL_NONE      no message will be print except the ones from the print functions
 - DEBUG_LEVEL_DEFAULT   the most useful messages
@@ -53,21 +53,21 @@ Example:
 > ECU.setDebugLevel(DEBUG_LEVEL_VERBOSE);
 
 
-#### disableDebug()
+### disableDebug()
 **Kill the debug messages**
 
 Example:
 > ECU.disableDebug();
 
 
-#### enableDealerMode(const uint8_t dealer_pin)
+### enableDealerMode(const uint8_t dealer_pin)
 **Enable the [dealer mode](https://www.gixxer.com/forums/80-06-07-gsx-r600-750/174828-gsxr-750-k6-k7-dealer-mode-bypass-guide.html):** Choose the pin which trigger the dealer mode *needs an optocoupler*
 
 Example:
 > ECU.enableDealerMode(14);
 
 
-#### dealerMode(const uint8_t dealer_mode)
+### dealerMode(const uint8_t dealer_mode)
 **Enable/disable the dealer mode**
 
 Example:
@@ -75,8 +75,8 @@ Example:
 
 
 
-### Comunation - Basic
-#### initKline()
+## Comunation - Basic
+### initKline()
 **Initialize the comunication with the ECU:** returns `false` until the inizialization sequence is not completed, `true` when it is completed and correct, a `negative number` if something has gone wrong. A private array would be create from this function to store the response from the ECU
 
 *Optional:* select a different pointer which will contain the responses. See [*advanced_working.ino*](/examples/advanced_working/advanced_working.ino)
@@ -85,7 +85,7 @@ Example:
 > while(ECU.initKline() == 0){;};
 
 
-#### stopKline()
+### stopKline()
 **Close the comunication with the ECU:** returns `false` until the end sequence is not completed, `true` when it is completed
 
 *Optional:* if selected above a different memory address this would be deallocated
@@ -94,7 +94,7 @@ Example:
 > while(ECU.stopKline() == 0){;};
 
 
-#### keepAlive(uint16_t time = 1000)
+### keepAlive(uint16_t time = 1000)
 **Keep the KLine active:** after 2 seconds of inactivity the KLine closes automatically, this function should be at the end of you *loop()* or anyway called often
 
 *Optional:* choose how often this function will be called
@@ -103,7 +103,7 @@ Example:
 > ECU.keepAlive();
 
 
-#### requestSensorsData()
+### requestSensorsData()
 **Send a request and listen it's response:** this function does everything you need
 
 Example:
@@ -111,8 +111,8 @@ Example:
 
 
 
-### Comunation - Advanced
-#### sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t wait_to_send_all = false, const uint8_t use_delay = false)
+## Comunation - Advanced
+### sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t wait_to_send_all = false, const uint8_t use_delay = false)
 **Send a request to the ECU - Use this only if you know what are you doing:** select the *byte/uint8_t* array which will be sent and the size of this array
 
 *Calling this without inizializing the kline could bring to unpredictable crashes*
@@ -123,7 +123,7 @@ Example:
 > ECU.sendRequest(start_sequence, sizeof(start_sequence));
 
 
-#### listenResponse(uint8_t *resp = nullptr, uint8_t *resp_len = nullptr, const uint8_t use_delay = false)
+### listenResponse(uint8_t *resp = nullptr, uint8_t *resp_len = nullptr, const uint8_t use_delay = false)
 **Listen the response from the ECU - Use this only if you know what are you doing:** this function fill an array with the ECU response, meanwhile it makes sure that the data are correct and for us
 
 *Calling this without inizializing the kline could bring to unpredictable crashes*
@@ -135,8 +135,8 @@ Example:
 
 
 
-### Print and Get Methods
-#### printStatus(uint16_t time = 2000)
+## Print and Get Methods
+### printStatus(uint16_t time = 2000)
 **Print some useful info and error messages:** 
 ```
 ---- STATUS ----
@@ -158,7 +158,7 @@ Example:
 > ECU.printStatus();
 
 
-#### printSensorsData(uint16_t time = 1)
+### printSensorsData(uint16_t time = 1)
 **Print the sensors data:** needs to be called after *requestSensorsData()*
 
 *Optional:* choose how often this function will be called
@@ -167,35 +167,35 @@ Example:
 > ECU.printSensorsData();
 
 
-#### printLastResponse()
+### printLastResponse()
 **Print the last response received by the ECU**
 
 Example:
 > ECU.printLastResponse();
 
 
-#### getStatus()
+### getStatus()
 **Get the connection status of the ECU:** returns `true` if connected, `false` if not
 
 Example:
 > ECU.getStatus();
 
 
-#### getError()
+### getError()
 **Get a general error:** this function will just return `true` if there is no error, `-1` if there is any error. The library handles 12+ possible error codes, see them in *printStatus()*
 
 Example:
 > ECU.getError();
 
 
-#### resetError()
+### resetError()
 **Remove all error codes**
 
 Example:
 > ECU.resetError();
 
 
-#### get*
+### get*
 **get any sensor value**
 Return the value of the sensor, actually it's possibile with:
 - GPS: Gear Position Sensor
@@ -222,11 +222,11 @@ Example:
 I do not assume and hereby disclaim any liability to any party for any damage to proprierty or person
 
 ## Version - Change Log
-##### 1.0.0 - next
+#### 1.0.0 - next
 - road test passed :D
 - version promoted for pubblication on the arduino library manager
 
-##### 0.4.1 - Oct 12, 2018
+#### 0.4.1 - Oct 12, 2018
 - made two examples sketches
 - added ECU_Emulator written in python
 - merged printStatus and printError
@@ -237,16 +237,16 @@ I do not assume and hereby disclaim any liability to any party for any damage to
 - review all the code
 - added more resources
 
-##### 0.3.0 - Sep 13, 2018
+#### 0.3.0 - Sep 13, 2018
 - solved the bug with FreeRTOS
 - moved the BT serial in a fork
 - added wonderful code to manage comunication errors
 
-##### 0.2.0 - Aug 30, 2018
+#### 0.2.0 - Aug 30, 2018
 - problem with FreeRTOS 
 - big cleaning of the code
 - removed all the blocking code
 - added BT serial
 
-##### 0.1.0 - Mar 22, 2018
+#### 0.1.0 - Mar 22, 2018
 - created github repo
