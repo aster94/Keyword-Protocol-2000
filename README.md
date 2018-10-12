@@ -144,9 +144,9 @@ Connection:		Connected
 Errors:			No
 last data:		0.37 seconds ago
 Baudrate:		115200
-K-line TX pin:	22
+K-line TX pin:	    22
 Dealer pin:		25
-Dealer mode:	Disabled
+Dealer mode:	    Disabled
 
 ---- ERRORS ----
 no errors
@@ -196,11 +196,10 @@ Example:
 
 
 ### get*
-**get any sensor value**
-Return the value of the sensor, actually it's possibile with:
+**get any sensor value:** return the value of the sensor, actually it's possibile with:
 - GPS: Gear Position Sensor
 - RPM: Right Per Minutes
-- Speed: speed of the bike
+- SPEED: speed of the bike
 - TPS: Throttle Position Sensor
 - IAP: Intake Air Pressure
 - IAT: Intake Air Temperature
