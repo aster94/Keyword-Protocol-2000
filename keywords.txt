@@ -6,18 +6,43 @@
 # Datatypes (KEYWORD1)
 #######################################
 
-KWP2000     KEYWORD1
+KWP2000                 KEYWORD1
 
 #######################################
 # Methods and Functions (KEYWORD2)
 #######################################
 
-initKline KEYWORD2
+enableDebug             KEYWORD2
+disableDebug            KEYWORD2
+setDebugLevel           KEYWORD2
+enableDealerMode        KEYWORD2        
+dealerMode              KEYWORD2
+sendRequest             KEYWORD2
+listenResponse          KEYWORD2
+requestSensorsData      KEYWORD2
+initKline               KEYWORD2
+stopKline               KEYWORD2
+keepAlive               KEYWORD2
+printStatus             KEYWORD2
+printSensorsData        KEYWORD2
+printLastResponse       KEYWORD2
+getStatus               KEYWORD2
+getError                KEYWORD2
+resetError              KEYWORD2
+getGear                 KEYWORD2
+getRPM                  KEYWORD2
+getSpeed                KEYWORD2
+getTPS                  KEYWORD2
+getIAP                  KEYWORD2
+getIAT                  KEYWORD2
+getECT                  KEYWORD2
+getSTPS                 KEYWORD2
 
-#######################################
-# Instances (KEYWORD2)
-#######################################
 
 #######################################
 # Constants (LITERAL1)
 #######################################
+
+DEBUG_LEVEL_NONE        LITERAL1
+DEBUG_LEVEL_DEFAULT     LITERAL1
+DEBUG_LEVEL_VERBOSE     LITERAL1
