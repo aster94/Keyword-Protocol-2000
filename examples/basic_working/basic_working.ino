@@ -1,6 +1,6 @@
 #include "KWP2000.h"
 HardwareSerial suzuki(2);
-KWP2000 SDS(&suzuki, 22, 1, 115200);
+KWP2000 ECU(&suzuki, 22, 115200);
 
 uint8_t dealer_status = false;
 char in;
@@ -8,9 +8,9 @@ char in;
 
 void setup()
 {
-    SDS.enableDebug(&Serial, 115200, DEBUG_LEVEL_NONE);
+    ECU.enableDebug(&Serial, 115200, DEBUG_LEVEL_NONE);
     //Serial.begin(); this is not needed because we use then same serial as the debug
-    SDS.enableDealerMode(25);
+    ECU.enableDealerMode(25);
     
     // empty serial buffer
     while(!Serial){}
@@ -19,7 +19,7 @@ void setup()
 
 void loop()
 {
-    SDS.printStatus();
+    ECU.printStatus();
     if (Serial.available() > 0)
     {
         in = Serial.read();
@@ -29,24 +29,24 @@ void loop()
         switch (in)
         {
         case 'i':
-            while (SDS.initKline() == 0){;}
+            while (ECU.initKline() == 0){;}
             break;
         
         case 'd':
             dealer_status = !dealer_status;
-            SDS.dealerMode(dealer_status);
+            ECU.dealerMode(dealer_status);
             break;
 
         case 's':
-            SDS.requestSensorsData();
-            SDS.printSensorsData();
+            ECU.requestSensorsData();
+            ECU.printSensorsData();
             break;
 
         case 'c':
-            SDS.stopKline();
+            while (ECU.stopKline() == 0){;}
             break;
         }
         in = 0;
     }
-    SDS.keepAlive();
+    ECU.keepAlive();
 }
