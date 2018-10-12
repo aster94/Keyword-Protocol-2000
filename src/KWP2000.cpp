@@ -24,15 +24,47 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 
 #define LEN(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
 
-////////////// SETUP ////////////////
+const uint8_t maxLen = 60; // maximum lenght of a response from the ecu
 
-KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint8_t model, const uint32_t kline_baudrate)
+// These values are defined by the ISO protocol
+#define ISO_BYTE_DELAY 10
+#define ISO_MAX_SEND_TIME 2000
+#define ISO_DELAY_BETWEN_REQUEST 40
+#define ISO_START_TIME 2000
+#define ISO_CONNECTION_LOST 2000
+
+#define IGNORE_TIME 2000
+#define KEEP_ALIVE_TIME 1000
+
+enum error_enum // a nice collection of ECU Errors
+{
+    EE_CLEAR,  // clear all errors
+    EE_START,  // unable to start comunication
+    EE_STOP,   // unable to stop comunication
+    EE_TO,     // data is not for us
+    EE_FROM,   // data don't came from the ECU
+    EE_CS,     // checksum error
+    EE_ECHO,   // echo error
+    EE_MEMORY, // memory leak
+    EE_UNEX,   // unexpected error
+    EE_HEADER, // strange header
+    EE_STEP,   // request without init
+    EE_TOTAL   // this is just to know how many possible errors are in this enum
+};
+
+
+////////////// CONSTRUCTOR ////////////////
+
+KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint32_t kline_baudrate)
 {
     _kline = kline_serial;
     _kline_baudrate = kline_baudrate;
     _k_out_pin = k_out_pin;
-    _model = model;
+    //_model = model;
 }
+
+
+////////////// SETUP ////////////////
 
 void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint32_t debug_baudrate, const uint8_t debug_level)
 {
@@ -46,16 +78,6 @@ void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint32_t debug_bau
     }
 }
 
-void KWP2000::disableDebug()
-{
-    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-    {
-        _debug->println("Debug disabled");
-    }
-    _debug_level = DEBUG_LEVEL_NONE;
-    _debug->end();
-}
-
 void KWP2000::setDebugLevel(const uint8_t debug_level)
 {
     _debug_level = debug_level;
@@ -64,6 +86,16 @@ void KWP2000::setDebugLevel(const uint8_t debug_level)
         _debug->print("Debug level: ");
         _debug->println(debug_level);
     }
+}
+
+void KWP2000::disableDebug()
+{
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->println("Debug disabled");
+    }
+    _debug_level = DEBUG_LEVEL_NONE;
+    _debug->end();
 }
 
 void KWP2000::enableDealerMode(const uint8_t dealer_pin)
@@ -83,7 +115,374 @@ void KWP2000::dealerMode(const uint8_t dealer_mode)
     }
 }
 
-////////////// COMMUNICATION ////////////////
+
+////////////// COMMUNICATION - Basic ////////////////
+
+int8_t KWP2000::initKline(uint8_t **p_p)
+{
+    if (_ECU_status == true)
+    {
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+        {
+            _debug->println("\nAlready connected");
+        }
+        return 1;
+    }
+
+    if (_sequence_started == false)
+    {
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+        {
+            _debug->println("\nInitialize K-line");
+        }
+
+        if (_pArray_is_allocated == false)
+        {
+            _pArray = new (std::nothrow) uint8_t[maxLen]; //mdf
+            _pArray_is_allocated = true;
+
+            if (p_p != nullptr)
+            {
+                // we passed a pointer to point _pArray
+                *p_p = _pArray;
+
+                if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+                {
+                    _debug->print("Allocating given poiners: ");
+                }
+                if (p_p == nullptr)
+                {
+                    if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+                    {
+                        _debug->println("wrong");
+                    }
+                    setError(EE_MEMORY);
+                }
+                else
+                {
+                    if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+                    {
+                        _debug->println("correct");
+                    }
+                }
+            }
+        }
+
+        if (_pArray == nullptr)
+        {
+            if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->println("Memory allocation: wrong");
+            }
+            setError(EE_MEMORY);
+            return -1;
+        }
+        else
+        {
+            if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->println("Memory allocation: correct");
+            }
+        }
+
+        _kline->end();
+        pinMode(_k_out_pin, OUTPUT);
+        _sequence_started = true;
+        _start_time = millis();
+        _time_elapsed = 0;
+    }
+    _time_elapsed = millis() - _start_time;
+
+    if (_time_elapsed < ISO_START_TIME)
+    {
+        digitalWrite(_k_out_pin, HIGH);
+        return 0;
+    }
+    else if (_time_elapsed >= ISO_START_TIME && _time_elapsed < ISO_START_TIME + 25)
+    {
+        digitalWrite(_k_out_pin, LOW);
+        return 0;
+    }
+    else if (_time_elapsed >= ISO_START_TIME + 25 && _time_elapsed < ISO_START_TIME + 50)
+    {
+        digitalWrite(_k_out_pin, HIGH);
+        return 0;
+    }
+    else if (_time_elapsed >= ISO_START_TIME + 50)
+    {
+        _sequence_started = false;
+
+        _kline->begin(_kline_baudrate);
+        delay(5); //todo how much?
+
+        sendRequest(start_com, LEN(start_com));
+        listenResponse();
+
+        if (compareResponse(start_com_ok, _pArray, LEN(start_com_ok)) == true)
+        {
+            if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+            {
+                _debug->println("ECU connected");
+            }
+            _ECU_status = true;
+            setError(EE_CLEAR);
+            return 1;
+        }
+        else
+        {
+            if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+            {
+                _debug->println("initialization failed");
+            }
+            _ECU_status = false;
+            setError(EE_START);
+            return -2;
+        }
+    }
+    //the program should never arrive here
+    setError(EE_UNEX);
+    return -3;
+}
+
+int8_t KWP2000::stopKline(uint8_t **p_p, uint8_t *p_p_len)
+{
+    if (_ECU_status == false)
+    {
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+        {
+            _debug->println("\nAlready disconnected");
+        }
+        return 1;
+    }
+
+    if (_sequence_started == false)
+    {
+        _sequence_started = true;
+
+        /*
+        todo is there any sequence or I just close and wait?
+        sendRequest(close_com, LEN(close_com));
+
+        if (compareResponse(close_com_ok, _pArray, LEN(close_com_ok)) == true) {
+        //closed without problems
+        _ECU_status = false;
+        setError(EE_CLEAR);
+        }
+        else
+        {
+        //not closed correctly
+        _ECU_status = false;
+        setError(EE_STOP);
+        }
+        */
+
+        // deference the pointer if we passed it
+        if (p_p != nullptr && p_p_len != nullptr)
+        {
+            *p_p = nullptr;
+            *p_p_len = 0;
+            if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->print("Deallocating given poiners: ");
+            }
+            if (*p_p == nullptr)
+            {
+                if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+                {
+                    _debug->println("correct");
+                }
+            }
+            else
+            {
+                if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+                {
+                    _debug->println("wrong");
+                }
+            }
+        }
+
+        delete[] _pArray;
+        _pArray_is_allocated = false;
+        _pArray = nullptr; //for some reason brings to errors when we init again
+        _pArray_len = 0;
+
+        if (_pArray == nullptr)
+        {
+            if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->println("_pArray deallocated");
+            }
+        }
+        else
+        {
+            setError(EE_MEMORY);
+            if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->println("_pArray not deallocated");
+            }
+        }
+
+        _last_correct_response = 0;
+        _last_data_print = 0;
+        _last_sensors_calculated = 0;
+        _last_status_print = 0;
+
+        _kline->end();
+
+        setError(EE_CLEAR);
+        _start_time = millis();
+        _time_elapsed = 0;
+    }
+
+    _time_elapsed = millis() - _start_time;
+
+    if (_time_elapsed < IGNORE_TIME) //ECU ignores requests for 2 seconds after an error appear
+    {
+        return 0;
+    }
+    else
+    {
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+        {
+            _debug->println("ECU disconnected");
+        }
+        _ECU_status = false;
+        _sequence_started = false;
+        return 1;
+    }
+}
+
+void KWP2000::keepAlive(uint16_t time)
+{
+    if (_ECU_status == false) //if it is not connected it is meaningless to send a request
+    {
+        return;
+    }
+
+    if (millis() - _last_correct_response >= ISO_CONNECTION_LOST)
+    {
+        // probably the connection has been lost
+        _debug->println("are you still there?");
+        stopKline(); // should i try to send a request anyway?
+        return;
+    }
+
+    if (time > ISO_MAX_SEND_TIME)
+    {
+        // prevent humans errors
+        time = KEEP_ALIVE_TIME;
+    }
+
+    if (millis() - _last_correct_response <= time)
+    {
+        // not enough time has passed since last time we talked with the ECU
+        return;
+    }
+
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->print("\nKeeping connection alive\nLast:");
+        _debug->println(millis() - _last_correct_response);
+    }
+#if defined(SUZUKI)
+    //todo find a shorter request
+    sendRequest(request_sens, LEN(request_sens));
+#elif defined(KAWASAKI)
+    sendRequest(request_sens[0], LEN(request_sens[0][0]));
+#elif defined(HONDA)
+    sendRequest(request_sens, LEN(request_sens));
+#endif
+    //empty the buffer
+    listenResponse(); // or just a while serial read etc.
+}
+
+void KWP2000::requestSensorsData()
+{
+    if (_ECU_status == false)
+    {
+        if (_debug_level >= DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println("Non connected to the ECU");
+        }
+        setError(EE_STEP);
+        return;
+    }
+
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->println("Requesting Sensors Data");
+    }
+
+#if defined(SUZUKI)
+
+    sendRequest(request_sens, LEN(request_sens));
+    listenResponse();
+
+#elif defined(KAWASAKI)
+
+    for (uint8_t request = 0; request < LEN(request_sens); request++)
+    {
+        sendRequest(request_sens[request], LEN(request_sens[request][0]));
+        listenResponse();
+        //increase addres of _pArray
+    }
+
+#elif defined(HONDA)
+
+    //no idea
+
+#endif
+
+    //Speed
+    _SPEED = _pArray[PID_SPEED] * 2;
+
+    //RPM (Rights Per Minutes) it is split between two byte
+    _RPM = _pArray[PID_RPM_H] * 10 + _pArray[PID_RPM_L] / 10;
+
+    //TPS (Throttle Position Sensor)
+    _TPS = 125 * (_pArray[PID_TPS] - 55) / (256 - 55);
+
+    //IAP (Intake Air Pressure)
+    _IAP = _pArray[PID_IAP] * 4 * 0.136;
+
+    //ECT (Engine Coolant Temperature)
+    _ECT = (_pArray[PID_ECT] - 48) / 1.6;
+
+    //IAT (Intake Air Temperature)
+    _IAT = (_pArray[PID_IAT] - 48) / 1.6;
+
+    //STPS (Secondary Throttle Position Sensor)
+    _STPS = _pArray[PID_STPS] / 2.55;
+
+    //GEAR
+    _GEAR1 = _pArray[PID_GPS];
+    _GEAR2 = _pArray[PID_CLUTCH];
+    _GEAR3 = _pArray[PID_GEAR_3];
+    //_GEAR = ?
+
+    //GPS (Gear Position Sensor)
+
+    /*
+    other sensors
+
+    //voltage?
+    voltage = _pArray[32] * 100 / 126;
+
+    //FUEL 40-46
+
+    //IGN 49-52
+
+    //STVA
+    STVA = _pArray[54] * 100 / 255;
+
+    //pair
+    PAIR = _pArray[59];
+    */
+    _last_sensors_calculated = millis();
+}
+
+
+////////////// COMMUNICATION - Advanced ////////////////
 
 void KWP2000::sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t wait_to_send_all, const uint8_t use_delay)
 {
@@ -129,35 +528,30 @@ void KWP2000::sendRequest(const uint8_t to_send[], const uint8_t send_len, const
     }
 }
 
-//*resp pointer which point to an array where we store the data
-//*resp_len              total bytes that will be received (header+response+checksum)
 void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use_delay)
 {
-    //assign pointer to default address if this function is called without arguments
-    if (resp == nullptr)
+    // when this function is called without arguments it will save the response only to _pArray
+    // otherwise it will save the response also to the given array/pointer
+    uint8_t save = false;
+    if (resp != nullptr && resp_len != nullptr)
     {
-        resp = _pArray;
-        if (resp == nullptr)
-        {
-            setError(EE_MEMORY);
-            return;
-        }
+        save = true;
     }
 
-    if (resp_len == nullptr)
+    if ((resp == nullptr) ^ (resp_len == nullptr))
     {
-        resp_len = &_pArray_len;
-        if (resp_len == nullptr)
-        {
-            setError(EE_MEMORY);
-            return;
-        }
+        setError(EE_MEMORY);
+        return;
     }
 
     //empy the array
     for (uint8_t i = 0; i < maxLen; ++i)
     {
-        resp[i] = 0;
+        _pArray[i] = 0;
+        if (save)
+        {
+            resp[i] = 0;
+        }
     }
 
     uint8_t response_completed = false;     //when true no more bytes will be received
@@ -173,7 +567,11 @@ void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use
         if (_kline->available() > 0)
         {
             incoming = _kline->read();
-            resp[n_byte] = incoming;
+            _pArray[n_byte] = incoming;
+            if (save)
+            {
+                resp[n_byte] = incoming;
+            }
 
             if (_debug_level >= DEBUG_LEVEL_VERBOSE)
             {
@@ -257,16 +655,20 @@ void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use
                 else //its the checksum
                 {
                     response_completed = true;
-                    *resp_len = n_byte;
+                    _pArray_len = n_byte;
+                    if (save)
+                    {
+                        *resp_len = n_byte;
+                    }
 
                     if (_debug_level >= DEBUG_LEVEL_VERBOSE)
                     {
                         _debug->println("\n\nEnd of response");
                         _debug->print("bytes received: ");
-                        _debug->println(*resp_len);
+                        _debug->println(_pArray_len);
                     }
 
-                    checksum = calc_checksum(resp, *resp_len);
+                    checksum = calc_checksum(_pArray, _pArray_len);
                     if (checksum == incoming)
                     {
                         //the checksum is correct and everything went well!
@@ -303,280 +705,9 @@ void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use
     {
         delay(ISO_DELAY_BETWEN_REQUEST);
     }
-    resp_len = nullptr; //deferencing the pointer
-}
-
-void KWP2000::requestSensorsData()
-{
-    if (_ECU_status == false)
-    {
-        setError(EE_STEP);
-        return;
-    }
-
-    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-    {
-        _debug->println("Requesting Sensors Data");
-    }
-
-#if defined(SUZUKI)
-
-    sendRequest(request_sens, LEN(request_sens));
-    listenResponse();
-
-#elif defined(KAWASAKI)
-
-    for (uint8_t request = 0; request < LEN(request_sens); request++)
-    {
-        sendRequest(request_sens[request], LEN(request_sens[request][0]));
-        listenResponse();
-        //increase addres of _pArray
-    }
-
-#elif defined(HONDA)
-
-    //no idea
-
-#endif
-
-    //Speed
-    _SPEED = _pArray[PID_SPEED] * 2;
-
-    //RPM (Rights Per Minutes) it is split between two byte
-    _RPM = _pArray[PID_RPM_H] * 10 + _pArray[PID_RPM_L] / 10;
-
-    //TPS (Throttle Position Sensor)
-    _TPS = 125 * (_pArray[PID_TPS] - 55) / (256 - 55);
-
-    //IAP (Intake Air Pressure)
-    _IAP = _pArray[PID_IAP] * 4 * 0.136;
-
-    //ECT (Engine Coolant Temperature)
-    _ECT = (_pArray[PID_ECT] - 48) / 1.6;
-
-    //IAT (intake Air Temperature)
-    _IAT = (_pArray[PID_IAT] - 48) / 1.6;
-
-    //STPS (Secondary Throttle Position Sensor)
-    _STPS = _pArray[PID_STPS] / 2.55;
-
-    //GEAR
-    _GEAR1 = _pArray[PID_GPS];
-    _GEAR2 = _pArray[PID_CLUTCH];
-    _GEAR3 = _pArray[PID_GEAR_3];
-    //_GEAR = ?
-
-    //GPS (Gear Position Sensor)
-
-    /*
-    other sensors
-
-    //voltage?
-    voltage = _pArray[32] * 100 / 126;
-
-    //FUEL 40-46
-
-    //IGN 49-52
-
-    //STVA
-    STVA = _pArray[54] * 100 / 255;
-
-    //pair
-    PAIR = _pArray[59];
-    */   
-}
-
-int8_t KWP2000::initKline()
-{
-    if (_ECU_status == true)
-    {
-        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-        {
-            _debug->println("\nAlready connected");
-        }
-        return 1;
-    }
-
-    if (_sequence_started == false)
-    {
-        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-        {
-            _debug->println("\nInitialize K-line");
-        }
-
-        if (_pArray_is_allocated == false)
-        {
-            _pArray = new (std::nothrow) uint8_t[maxLen]; //mdf
-            _pArray_is_allocated = true;
-        }
-
-        if (_pArray == nullptr)
-        {
-            setError(EE_MEMORY);
-            return -1;
-        }
-
-        _kline->end();
-        pinMode(_k_out_pin, OUTPUT);
-        _sequence_started = true;
-        _start_time = millis();
-        _time_elapsed = 0;
-    }
-    _time_elapsed = millis() - _start_time;
-
-    if (_time_elapsed < ISO_START_TIME)
-    {
-        digitalWrite(_k_out_pin, HIGH);
-        return 0;
-    }
-    else if (_time_elapsed >= ISO_START_TIME && _time_elapsed < ISO_START_TIME + 25)
-    {
-        digitalWrite(_k_out_pin, LOW);
-        return 0;
-    }
-    else if (_time_elapsed >= ISO_START_TIME + 25 && _time_elapsed < ISO_START_TIME + 50)
-    {
-        digitalWrite(_k_out_pin, HIGH);
-        return 0;
-    }
-    else if (_time_elapsed >= ISO_START_TIME + 50)
-    {
-        _sequence_started = false;
-
-        _kline->begin(_kline_baudrate);
-        delay(5); //todo how much?
-
-        sendRequest(start_com, LEN(start_com));
-        listenResponse();
-
-        if (compareResponse(start_com_ok, _pArray, LEN(start_com_ok)) == true)
-        {
-            if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-            {
-                _debug->println("ECU connected");
-            }
-            _ECU_status = true;
-            setError(EE_CLEAR);
-            return 1;
-        }
-        else
-        {
-            if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-            {
-                _debug->println("initialization failed");
-            }
-            _ECU_status = false;
-            setError(EE_START);
-            return -2;
-        }
-    }
-    //the program should never arrive here
-    setError(EE_UNEX);
-    return -3;
-}
-
-int8_t KWP2000::stopKline()
-{
-    if (_ECU_status == false)
-    {
-        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-        {
-            _debug->println("\nAlready disconnected");
-        }
-        return 1;
-    }
-
-    if (_sequence_started == false)
-    {
-        _sequence_started = true;
-
-        /*
-        todo is there any sequence or I just close and wait?
-        sendRequest(close_com, LEN(close_com));
-
-        if (compareResponse(close_com_ok, _pArray, LEN(close_com_ok)) == true) {
-        //closed without problems
-        _ECU_status = false;
-        setError(EE_CLEAR);
-        }
-        else
-        {
-        //not closed correctly
-        _ECU_status = false;
-        setError(EE_STOP);
-        }
-        */
-
-        delete[] _pArray;
-        _pArray_is_allocated = false;
-        _last_correct_response = 0;
-        _kline->end();
-        _ECU_status = false;
-        setError(EE_CLEAR);
-
-        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-        {
-            _debug->println("ECU disconnected");
-        }
-        _start_time = millis();
-        _time_elapsed = 0;
-    }
-
-    _time_elapsed = millis() - _start_time;
-
-    if (_time_elapsed < 2000) //ECU ignores requests for 2 seconds after an error appear
-    {
-        return 0;
-    }
-    else
-    {
-        _sequence_started = false;
-        return 1;
-    }
-}
-
-void KWP2000::keepAlive(uint16_t time)
-{
-    if (_ECU_status == false) //if it is not connected it is meaningless to send a request
-    {
-        return;
-    }
-
-    if (millis() - _last_correct_response >= ISO_CONNECTION_LOST)
-    {
-        // probably the connection has been lost
-        _debug->println("are you still there?");
-        stopKline(); // should i try to send a request anyway?
-        return;
-    }
-
-    if (time > ISO_MAX_SEND_TIME)
-    {
-        // prevent humans errors
-        time = KEEP_ALIVE_TIME;
-    }
-
-    if (millis() - _last_correct_response <= time)
-    {
-        // not enough time has passed since last time we talked with the ECU
-        return;
-    }
-
-    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-    {
-        _debug->print("\nKeeping connection alive\nLast:");
-        _debug->println(millis() - _last_correct_response);
-    }
-#if defined(SUZUKI)
-    //todo find a shorter request
-    sendRequest(request_sens, LEN(request_sens));
-#elif defined(KAWASAKI)
-    sendRequest(request_sens[0], LEN(request_sens[0][0]));
-#elif defined(HONDA)
-    sendRequest(request_sens, LEN(request_sens));
-#endif
-    //empty the buffer
-    listenResponse(); // or just a while serial read etc.
+    //deferencing the pointer, this shouldn't be necessary
+    resp = nullptr;
+    resp_len = nullptr;
 }
 
 /////////////////// PRINT and GET ///////////////////////
@@ -603,8 +734,8 @@ void KWP2000::printStatus(uint16_t time)
         _debug->print("Errors:\t\t\t");
         _debug->println(_ECU_error == 0 ? "No" : "Yes");
         _debug->print("last data:\t\t");
-        _debug->print(_last_correct_response == 0 ? "0" : String((millis() - _last_correct_response) / 1000.0, 2));
-        _debug->println(" seconds ago");
+        _debug->print(_last_correct_response == 0 ? "Never\n"
+                                                  : String((millis() - _last_correct_response) / 1000.0, 2) + " seconds ago\n");
         _debug->print("Baudrate:\t\t");
         _debug->println(_kline_baudrate);
         _debug->print("K-line TX pin:\t");
@@ -692,11 +823,10 @@ void KWP2000::printSensorsData(uint16_t time)
     if (_debug_level >= DEBUG_LEVEL_NONE)
     {
         _debug->print("---- SENSORS ----\n");
-        _debug->print("Calculated ");
-        _debug->print((millis() - _last_correct_response) / 1000.0);
-        _debug->println(" seconds ago");
-        _debug->print("Gear:\t");
-        _debug->println(_GEAR);
+        _debug->print("Calculated: ");
+        _debug->print(_last_sensors_calculated == 0 ? "Never\n" : String((millis() - _last_sensors_calculated) / 1000.0, 2) + " seconds ago\n");
+        _debug->print("GPS:\t");
+        _debug->println(_GPS);
         _debug->print("RPM:\t");
         _debug->println(_RPM);
         _debug->print("Speed:\t");
@@ -725,24 +855,12 @@ void KWP2000::printSensorsData(uint16_t time)
     }
 }
 
-void KWP2000::printLastResponse(uint8_t *resp, uint8_t **resp_len)
+void KWP2000::printLastResponse()
 {
-    
-    uint8_t save = false;
-    if (resp != nullptr && resp_len != nullptr){
-        save = true;
-        *resp_len = &_pArray_len;
-    }
-
     _debug->println("Last Response from the ECU:");
     for (uint8_t n = 0; n < _pArray_len; n++)
     {
-        _debug->println(_pArray[n],HEX);
-
-        // save response to a given array
-        if (save){
-            resp[n] = _pArray[n];
-        }
+        _debug->println(_pArray[n], HEX);
     }
 }
 
@@ -768,9 +886,9 @@ void KWP2000::resetError()
     setError(EE_CLEAR);
 }
 
-uint8_t KWP2000::getGear()
+uint8_t KWP2000::getGPS()
 {
-    return _GEAR;
+    return _GPS;
 }
 
 uint8_t KWP2000::getRPM()
@@ -778,7 +896,7 @@ uint8_t KWP2000::getRPM()
     return _RPM;
 }
 
-uint8_t KWP2000::getSpeed()
+uint8_t KWP2000::getSPEED()
 {
     return _SPEED;
 }
@@ -793,6 +911,11 @@ uint8_t KWP2000::getIAP()
     return _IAP;
 }
 
+uint8_t KWP2000::getIAT()
+{
+    return _IAT;
+}
+
 uint8_t KWP2000::getECT()
 {
     return _ECT;
@@ -802,6 +925,7 @@ uint8_t KWP2000::getSTPS()
 {
     return _STPS;
 }
+
 
 /////////////////// PRIVATE ///////////////////////
 
