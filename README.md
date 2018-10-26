@@ -1,28 +1,36 @@
 # Keyword Protocol 2000
-The [KWP2000](https://en.wikipedia.org/wiki/Keyword_Protocol_2000/) is a communications protocol used for on-board vehicle diagnostics systems (OBD) by Suzuki (SDS), Kawasaki (KDS), Yamaha (YDS), Honda (HDS) and more. It is based on the [ISO14230](https://www.iso.org/obp/ui/#iso:std:iso:14230:-1:ed-2:v1:en) and [ISO9141](https://www.iso.org/obp/ui/#iso:std:iso:9141:ed-1:v1:en) and uses a single line called the K-line. Using this communication protocol we send some Parameter IDs, knowns as [PID](https://en.wikipedia.org/wiki/OBD-II_PIDs).
+The [KWP2000](https://en.wikipedia.org/wiki/Keyword_Protocol_2000/) is a communications protocol used for [on-board vehicle diagnostics systems (OBD)](https://en.wikipedia.org/wiki/On-board_diagnostics) by Suzuki (SDS), Kawasaki (KDS), Yamaha (YDS), Honda (HDS) and more. It is standardized by the [ISO 14230](https://www.iso.org/obp/ui/#iso:std:iso:14230:-1:ed-2:v1:en), which is very similar to the [ISO 9141-2](https://www.iso.org/obp/ui/#iso:std:iso:9141:-2:ed-1:v1:en). Both uses a single line called the K-line through it we send some Parameter IDs, knowns as PIDs, to the [Electronic Control Unit (ECU)](https://en.wikipedia.org/wiki/Electronic_control_unit). This way we have total control on the ECU: we are able to ask for sensors data (such as RPM, gear, speed, temperatures, etc.), see error codes (clear them), upload/download and so on
 
-More info in the links above, and in the extras folder
 
 ### Hardware
 Any microcontroller (MCU) could be used. Many IC could be used as interface, for example:
 - L9637
 - MC33660
 - MC33199
-- operational amplifiers/level shifter (**not recconmended**)
+- operational amplifiers/level shifter/transistors (**not recommended**)
 
 ### Tested Vehicles
 - Suzuki GSX-R 600 L1 (2011)
 
 # Usage
-See the examples sketches, I also made a ECU Emulator written in python for the development of new functions/tests
+### Hardware
+You have to find the K-line of your bike. In suzuki bikes it's under the rider's seat. Connect the Kline, Vcc and Gnd from the motorbikes
+
+Dealer Mode: if you wish also to be able to enter easily into this mode add an optocoupler with a ~330omh resistor between the MCU and the dealer pin
+
+**I will post pictures and a schematics*
+
+### Software
+First of all go to [PIDs.h](/src/PIDs.h) and decomment (delete the `//` symbols) your motorbike, then upload any of the the [examples](/examples/)
+I also made a ECU Emulator written in python for the development of new functions/tests
 
 ## Installation
 Simply add this from the Arduino Library Manager or download this repository and add it to your library folder
 
 ## Function Description
-Generally the functions return `true` if everything went correct, a `negative number` if there where any error, `false` if nothing changed
+Generally the functions return `true` if everything went fine, a `negative number` if there where any error, `false` if nothing changed
 
-# KWP2000 class
+# Documentation
 ### KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint32_t kline_baudrate = 10400)
 **Constructor:** choose the serial port which will be used to talk with the ECU and the TX pin of this serial
 
@@ -45,8 +53,7 @@ Example:
 
 ### setDebugLevel(const uint8_t debug_level)
 **Change the verbosity of the debug messages:** you could choose between:
-- DEBUG_LEVEL_NONE      no message will be print except the ones from the print functions
-- DEBUG_LEVEL_DEFAULT   the most useful messages
+- DEBUG_LEVEL_DEFAULT   only the most useful messages
 - DEBUG_LEVEL_VERBOSE   print almost everythings happends between your MCU and the ECU
 
 Example:
@@ -61,7 +68,7 @@ Example:
 
 
 ### enableDealerMode(const uint8_t dealer_pin)
-**Enable the [dealer mode](https://www.gixxer.com/forums/80-06-07-gsx-r600-750/174828-gsxr-750-k6-k7-dealer-mode-bypass-guide.html):** Choose the pin which trigger the dealer mode *needs an optocoupler*
+**Enable the dealer mode:** choose the pin which trigger the dealer mode
 
 Example:
 > ECU.enableDealerMode(14);
@@ -100,7 +107,7 @@ Example:
 *Optional:* choose how often this function will be called
 
 Example:
-> ECU.keepAlive();
+> loop() {/*your code*/ ECU.keepAlive();}
 
 
 ### requestSensorsData()
@@ -212,40 +219,15 @@ Example:
 
 
 
-## Future Development
-- test on other bikes
-- discover new PIDs
-- add more sensors
-
 ## Disclaimer
 I do not assume and hereby disclaim any liability to any party for any damage to proprierty or person
 
-## Version - Change Log
-#### 1.0.0 - next
-- road test passed :D
-- version promoted for pubblication on the arduino library manager
 
-#### 0.4.1 - Oct 12, 2018
-- made two examples sketches
-- added ECU_Emulator written in python
-- merged printStatus and printError
-- added printSensorData
-- added printLastResponse
-- added new errors and better error handling
-- added documentation
-- review all the code
-- added more resources
+## Influence:
+- [ECU Hacking forum](https://ecuhacking.activeboard.com/): 
+    - https://ecuhacking.activeboard.com/t56234221/kds-protocol
 
-#### 0.3.0 - Sep 13, 2018
-- solved the bug with FreeRTOS
-- moved the BT serial in a fork
-- added wonderful code to manage comunication errors
+- [Arduino forum](https://forum.arduino.cc/)
+    - https://forum.arduino.cc/index.php?topic=236092.0
 
-#### 0.2.0 - Aug 30, 2018
-- problem with FreeRTOS 
-- big cleaning of the code
-- removed all the blocking code
-- added BT serial
-
-#### 0.1.0 - Mar 22, 2018
-- created github repo
+- Others
