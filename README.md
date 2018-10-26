@@ -31,6 +31,9 @@ Simply add this from the Arduino Library Manager or download this repository and
 Generally the functions return `true` if everything went fine, a `negative number` if there where any error, `false` if nothing changed
 
 # Documentation
+
+## This is changing a lot, until versione 1.0.0 I won't update this documentation again so ask me or read the code
+
 ### KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint32_t kline_baudrate = 10400)
 **Constructor:** choose the serial port which will be used to talk with the ECU and the TX pin of this serial
 
