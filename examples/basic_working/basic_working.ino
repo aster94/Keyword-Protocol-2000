@@ -1,6 +1,10 @@
 #include "KWP2000.h"
-HardwareSerial suzuki(2);
-KWP2000 ECU(&suzuki, 22, 115200);
+#if defined (ARDUINO_ARCH_AVR)
+#define bike Serial2
+#elif defined (ARDUINO_ARCH_ESP32)
+HardwareSerial bike(2);
+#endif
+KWP2000 ECU(&subikezuki, 17);
 
 uint8_t dealer_status = false;
 char in;
@@ -10,7 +14,7 @@ void setup()
 {
     ECU.enableDebug(&Serial, 115200, DEBUG_LEVEL_NONE);
     //Serial.begin(); this is not needed because we use then same serial as the debug
-    ECU.enableDealerMode(25);
+    ECU.enableDealerMode(18);
     
     // empty serial buffer
     while(!Serial){}
