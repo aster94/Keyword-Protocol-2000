@@ -20,12 +20,23 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 /*  TODO
 check types
 pids from wikipedia / manzo / ecuhacking / forum ?
-how to manage model/brand?
 make an array to save errors?
-add F before all serial buffer
-check debug levels >
 remove resetError?
-remember to update keywords.txt and github
+remember to update keywords.txt and readme
+choose delay time for begin/end/echo
+in keepalive should i try to send a request anyway instead of closing?
+find shorter request for keepalive
+use listenResponse or while available/read in keepalive?
+smart delay for the delay at the end of send and listen
+why new and new.h check names in other platform, add compiler variables if needed
+try to compile on mega and stm
+remove echo?
+check init times
+check pids.h
+more const
+remove these lines before commit
+check if te ecu is connected before some functions
+check all serial if have F
 */
 
 #ifndef KWP2000_h
@@ -33,7 +44,6 @@ remember to update keywords.txt and github
 
 enum debug_enum // debug levels
 {
-    DEBUG_LEVEL_NONE,
     DEBUG_LEVEL_DEFAULT,
     DEBUG_LEVEL_VERBOSE
 };
@@ -58,7 +68,7 @@ class KWP2000
     void requestSensorsData();
 
     // COMMUNICATION - Advanced
-    void sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t wait_to_send_all = false, const uint8_t use_delay = false);
+    void sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t wait_to_send_all = true, const uint8_t use_delay = true);
     void listenResponse(uint8_t *resp = nullptr, uint8_t *resp_len = nullptr, const uint8_t use_delay = false);
 
     // PRINT and GET
@@ -76,41 +86,63 @@ class KWP2000
     uint8_t getIAT();
     uint8_t getECT();
     uint8_t getSTPS();
-    // todo voltage, temperature ecc
 
   private:
-    // declatations:
+    // k line
     HardwareSerial *_kline;
     uint32_t _kline_baudrate;
     uint8_t _k_out_pin;
-    uint8_t _model;
     uint8_t _dealer_pin;
     uint8_t _dealer_mode;
-
-    uint8_t _sequence_started = false;
+    uint8_t _init_sequence_started = false;
+    uint8_t _stop_sequence_started = false;
     uint32_t _start_time = 0;
-    uint32_t _time_elapsed = 0;
+    uint32_t _elapsed_time = 0;
+    uint8_t *_response = nullptr;
+    uint8_t _response_len = 0;
+    uint8_t _response_is_allocated = false;
+    uint8_t _response_data_start = 0;
+    uint8_t _request[20];
+    uint8_t _request_len = 0;
+    uint8_t _ECU_status = false;
+    uint32_t _ECU_error = 0;
+
+    // k line config
+    uint8_t _use_lenght_byte = true;
+    uint8_t _use_target_source_address = true;
+    uint8_t _timing_parameter = true; // normal
+    uint16_t ISO_T_IDLE = 0;
+    uint8_t ISO_T_P2_MIN = 25;
+    uint32_t ISO_T_P2_MAX = 50;
+    uint16_t ISO_T_P3_MIN = 55;
+    uint32_t ISO_T_P3_MAX = 5000;
+    uint32_t ISO_T_P3_mdf = 5000;
+    uint16_t ISO_T_P4_MIN = 10;   // average between min and max value
+
+    // debug
+    HardwareSerial *_debug;
+    uint8_t _debug_enabled = false;
+    uint32_t _debug_baudrate;
+    uint8_t _debug_level = DEBUG_LEVEL_DEFAULT;
     uint32_t _last_status_print = 0;
     uint32_t _last_data_print = 0;
     uint32_t _last_sensors_calculated = 0;
     uint32_t _last_correct_response = 0;
-    uint8_t *_pArray;
-    uint8_t _pArray_len;
-    uint8_t _pArray_is_allocated = false;
+    uint32_t _connection_time = 0;
 
-    HardwareSerial *_debug;
-    uint32_t _debug_baudrate;
-    uint8_t _debug_level = DEBUG_LEVEL_NONE;
-    uint8_t _ECU_status = false;
-    uint32_t _ECU_error = 0;
-
+    // sensors
     uint8_t _GPS, _RPM, _SPEED, _TPS, _IAP, _ECT, _STPS, _IAT;
     uint8_t _GEAR1, _GEAR2, _GEAR3;
 
-    // private functions
+    // functions
     void setError(const uint8_t error);
-    uint8_t calc_checksum(const uint8_t data[], const uint8_t len);
-    int8_t compareResponse(const uint8_t expectedResponse[], const uint8_t receivedResponse[], const uint8_t expectedResponseLen);
+    void configureKline();
+    void accessTimingParameter(const uint8_t read_only = false);
+    void changeTimingParameter(uint8_t new_atp[] = nullptr, const uint8_t new_atp_len = 0);
+    uint8_t calc_checksum(const uint8_t data[], const uint8_t data_len);
+    int8_t checkResponse(const uint8_t response_sent[]);
+    void endResponse(const uint8_t received_checksum);
+    void connectionExpired();
 };
 
 #endif
