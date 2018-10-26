@@ -43,7 +43,7 @@ const uint8_t OUR_addr = 0xF1; // between hex F0 and FD
 const uint8_t start_com[] = {0x81};
 const uint8_t stop_com[] = {0x82};
 
-// AccessTimingParameter and timing paramenter indicator
+// access timing parameter and timing paramenter indicator
 const uint8_t atp_read_limits[] = {0x83, 0x00};
 const uint8_t atp_set_default[] = {0x83, 0x01};
 const uint8_t atp_read_current[] = {0x83, 0x02};

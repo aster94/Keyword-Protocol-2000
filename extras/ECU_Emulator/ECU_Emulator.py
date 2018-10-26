@@ -11,12 +11,27 @@ from random import randint
 default_port = '/dev/ttyUSB1' # 'COMx' for windows '/dev/ttyUSBx' for linux
 this_address = 0xf1
 ecu_address = 0x12
-P2m = 50
-P2M = 3000
-P3m = 80
-P3M = 2000
+P2m = 40
+P2M_ms = 1000
+P3m = 50
+P3M_ms = 1500
 P4m = 10
 
+if P2M_ms <= 6000:
+    P2M_hex = int(P2M_ms / 25)
+elif P2M_ms > 6000 and P2M_ms <= 89600:
+    P2M_hex = int(P2M_ms / 256 / 25) | 0xf0
+else:
+    print ("P2M time too long")
+    sys.exit()
+
+if P3M_ms <= 6000:
+    P3M_hex = int(P3M_ms / 25)
+elif P3M_ms > 6000 and P3M_ms <= 89600:
+    P3M_hex = int(P3M_ms / 256 / 25) | 0xf0
+else:
+    print ("P3M time too long")
+    sys.exit()
 
 start_com = [0x81, ecu_address, this_address, 0x81, 0x5]
 start_com_ok = [0x80, this_address, ecu_address, 0x03, 0xC1, 0xEA, 0x8F]
@@ -27,7 +42,7 @@ stop_com_ok = [0x80, this_address, ecu_address, 0x01, 0xC2]
 
 atp_current = [[0x80, ecu_address, this_address, 0x2, 0x83, 0x02, 0xa],
                [0x82, ecu_address, this_address, 0x83, 0x02, 0xa]]
-atp_current_ok = [0x80, this_address, ecu_address, 0x07 , 0xC3, 0x2, P2m, int(P2M / 25), P3m, int(P3M / 25), P4m]
+atp_current_ok = [0x80, this_address, ecu_address, 0x07 , 0xC3, 0x2, P2m, P2M_hex, P3m, P3M_hex, P4m]
 
 atp_limits = [[0x80, ecu_address, this_address, 0x2, 0x83, 0x00, 0x8],
               [0x82, ecu_address, this_address, 0x83, 0x00, 0x8]]
@@ -107,7 +122,7 @@ def listen():
     while (ser.in_waiting > 0):
         elapsed_time = time.time() - start_time
         
-        while (elapsed_time < (P3M/1000.0)):
+        while (elapsed_time < (P3M_ms/1000.0)):
             in_bin = ser.read()
             in_hex = hex(int.from_bytes(in_bin, byteorder='little'))       
             #print ("Incoming byte " + str(byte) + ": " + in_hex)
@@ -136,9 +151,9 @@ def listen():
                     time.sleep(P2m/1000.0)
                     return True
                 else:
-                    print("wrong checksum!")
+                    print("Wrong checksum!")
                     print(request)
-                    print(cs)
+                    print("Expected: " + str(cs))
                     time.sleep(P2m/1000.0)
                     return False
             
@@ -161,12 +176,16 @@ except Exception as e:
 
 while 1:
     # connection expired
-    if (time.time() - last_data_received > P3M/1000.0):
-        if ECU_connected == True: print("Connection expired")
+  
+    if ((time.time() - last_data_received) > (P3M_ms/1000.0)):
+        if ECU_connected == True:
+            print("Connection expired")
+            print("From last data: " + str(P3M_ms/1000.0))
         ECU_connected = False
         ATP_setted = False
+        ATP_asked = False
         request.clear()
-        
+       
     if (listen()): # we received something
         
         if not ECU_connected:
@@ -180,7 +199,7 @@ while 1:
                 print(request)
                 
         elif ECU_connected and not ATP_asked and not ATP_setted:
-            if compare(request,atp_limits):
+            if compare(request, atp_limits):
                 print('ATP limits asked\n')
                 send(atp_limits_ok)
                 ATP_asked = True
@@ -198,7 +217,7 @@ while 1:
             if compare(request,atp_current):
                 print('Sending ATP response\n')
                 send(atp_current_ok)
-                ATP_setted = True #or does the ecu answer back?
+                ATP_setted = True
                 
             elif compare (request, stop_com):
                 print("The tester closed the link")
