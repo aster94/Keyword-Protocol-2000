@@ -28,12 +28,12 @@ in keepalive should i try to send a request anyway instead of closing?
 find shorter request for keepalive
 use listenResponse or while available/read in keepalive?
 smart delay for the delay at the end of send and listen
-why new and new.h check names in other platform, add compiler variables if needed
+why new and new.h? check names in other platform, add compiler variables if needed
 try to compile on mega and stm
 remove echo?
-check init times
+check init times with logic analizer
 check pids.h
-more const
+more const from the iso
 remove these lines before commit
 check if te ecu is connected before some functions
 check all serial if have F
@@ -64,12 +64,13 @@ class KWP2000
     // COMMUNICATION - Basic
     int8_t initKline(uint8_t **p_p = nullptr);
     int8_t stopKline(uint8_t **p_p = nullptr, uint8_t *p_p_len = nullptr);
-    void keepAlive(uint16_t time = 1000);
+    int8_t handleRequest(const uint8_t to_send[], const uint8_t send_len);
     void requestSensorsData();
+    void keepAlive(uint16_t time = 0);
 
     // COMMUNICATION - Advanced
-    void sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t wait_to_send_all = true, const uint8_t use_delay = true);
-    void listenResponse(uint8_t *resp = nullptr, uint8_t *resp_len = nullptr, const uint8_t use_delay = false);
+    void accessTimingParameter(const uint8_t read_only = false);
+    void changeTimingParameter(uint32_t new_atp[] = nullptr, const uint8_t new_atp_len = 0);
 
     // PRINT and GET
     void printStatus(uint16_t time = 2000);
@@ -115,9 +116,10 @@ class KWP2000
     uint8_t ISO_T_P2_MIN = 25;
     uint32_t ISO_T_P2_MAX = 50;
     uint16_t ISO_T_P3_MIN = 55;
-    uint32_t ISO_T_P3_MAX = 5000;
-    uint32_t ISO_T_P3_mdf = 5000;
-    uint16_t ISO_T_P4_MIN = 10;   // average between min and max value
+    uint32_t ISO_T_P3_MAX = 2000;
+    uint32_t ISO_T_P3_mdf = 2000;
+    uint16_t ISO_T_P4_MIN = 10; // average between min and max value
+    uint16_t _keep_iso_alive = 1000;
 
     // debug
     HardwareSerial *_debug;
@@ -135,12 +137,12 @@ class KWP2000
     uint8_t _GEAR1, _GEAR2, _GEAR3;
 
     // functions
+    void sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t wait_to_send_all = true, const uint8_t use_delay = true);
+    void listenResponse(uint8_t *resp = nullptr, uint8_t *resp_len = nullptr, const uint8_t use_delay = false);
+    int8_t checkResponse(const uint8_t response_sent[]);
     void setError(const uint8_t error);
     void configureKline();
-    void accessTimingParameter(const uint8_t read_only = false);
-    void changeTimingParameter(uint8_t new_atp[] = nullptr, const uint8_t new_atp_len = 0);
     uint8_t calc_checksum(const uint8_t data[], const uint8_t data_len);
-    int8_t checkResponse(const uint8_t response_sent[]);
     void endResponse(const uint8_t received_checksum);
     void connectionExpired();
 };

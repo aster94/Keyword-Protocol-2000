@@ -8,6 +8,12 @@
 - road test passed :D
 - version promoted for pubblication on the arduino library manager
 
+#### 0.5.1 - oct 27, 2018
+- added handle request
+- added changeTimingParameter
+- better keepAlive
+- solved bug in ECU emulator
+
 #### 0.5.0 - Oct 26, 2018
 - completely rewritten the sendRequest, listenResponse and checkResponse
 - more compliant with the ISO14230

@@ -24,7 +24,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include <new>
 #endif
 
-#define CELSIUS
+#define maybe 2
+
+//#define FAHRENHEIT
+#define TO_FAHRENHEIT(x) x * 1.8 + 32
 
 #define LEN(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
 
@@ -33,20 +36,22 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 
 // all the times are an average between max and minimum
 #define ISO_T_P1 10 // inter byte time for ECU response - min: 0 max: 20
+#define ISO_T_P2_MIN_LIMIT 50
+#define ISO_T_P2_MAX_LIMIT 89600
+#define ISO_T_P3_MAX_LIMIT 89600
 // P2 time between tester request and ECU response or two ECU responses
 // P3 time between end of ECU responses and start of new tester request
-#define ISO_T_P4_MAX 20 //inter byte time for tester request
-// P2 (min & max), P3 (min & max) and P4 (min) are defined by the ECU with AccessTimingParameter()
+#define ISO_T_P4_MAX_LIMIT 20 //inter byte time for tester request
+// P2 (min & max), P3 (min & max) and P4 (min) are defined by the ECU with accessTimingParameter()
 
 // Initialization
 #define ISO_T_IDLE_NEW 2000 // min 300, max undefinied
 #define ISO_T_INIL 25       // Initialization low time
 #define ISO_T_WUP 50        // Wake up Pattern
 
-#define KEEP_ALIVE_TIME 1000
-
 enum error_enum // a nice collection of ECU Errors
 {
+    EE_TEST,   // for various test
     EE_START,  // unable to start comunication
     EE_STOP,   // unable to stop comunication
     EE_TO,     // data is not for us
@@ -142,6 +147,8 @@ int8_t KWP2000::initKline(uint8_t **p_p)
 
     if (_init_sequence_started == false)
     {
+        _init_sequence_started = true;
+
         if (_debug_level >= DEBUG_LEVEL_DEFAULT)
         {
             _debug->println(F("\nInitialize K-line"));
@@ -223,19 +230,18 @@ int8_t KWP2000::initKline(uint8_t **p_p)
             ISO_T_IDLE = ISO_T_P3_MAX;
         }
 
-        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-        {
-            _debug->print(F("Starting sequence"));
-        }
-
         _use_lenght_byte = false;
         _use_target_source_address = true;
-        _kline->end();
+        //_kline->end();
         pinMode(_k_out_pin, OUTPUT);
         digitalWrite(_k_out_pin, LOW);
-        _init_sequence_started = true;
+
         _start_time = millis();
         _elapsed_time = 0;
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("Starting sequence"));
+        }
     }
     _elapsed_time = millis() - _start_time;
 
@@ -252,7 +258,7 @@ int8_t KWP2000::initKline(uint8_t **p_p)
         }
         return 0;
     }
-    else if ((_elapsed_time >= ISO_T_IDLE) && (_elapsed_time < (ISO_T_IDLE + ISO_T_INIL)))
+    else if ((_elapsed_time >= ISO_T_IDLE) && (_elapsed_time < ISO_T_IDLE + ISO_T_INIL))
     {
         if (digitalRead(_k_out_pin) != LOW)
         {
@@ -265,7 +271,7 @@ int8_t KWP2000::initKline(uint8_t **p_p)
         }
         return 0;
     }
-    else if ((_elapsed_time >= (ISO_T_IDLE + ISO_T_INIL)) && (_elapsed_time < (ISO_T_IDLE + ISO_T_WUP)))
+    else if ((_elapsed_time >= ISO_T_IDLE + ISO_T_INIL) && (_elapsed_time < ISO_T_IDLE + ISO_T_WUP))
     {
         if (digitalRead(_k_out_pin) != HIGH)
         {
@@ -284,16 +290,15 @@ int8_t KWP2000::initKline(uint8_t **p_p)
         {
             _debug->print(F("T3:\t"));
             _debug->println(_elapsed_time);
-            _debug->print(F("\nSending the start sequence"));
+            _debug->println(F("\nSending the start sequence"));
         }
         _init_sequence_started = false;
+
         _start_time = 0;
         _elapsed_time = 0;
         _kline->begin(_kline_baudrate, SERIAL_8O1);
 
-        sendRequest(start_com, LEN(start_com));
-        listenResponse();
-        if (checkResponse(start_com) == true)
+        if (handleRequest(start_com, LEN(start_com)))
         {
             if (_debug_level >= DEBUG_LEVEL_DEFAULT)
             {
@@ -320,9 +325,7 @@ int8_t KWP2000::initKline(uint8_t **p_p)
         {
             _debug->print(F("Reading timing limits"));
         }
-        sendRequest(atp_read_limits, LEN(atp_read_limits), false);
-        listenResponse();
-        if (checkResponse(atp_read_limits) == true)
+        if (handleRequest(atp_read_limits, LEN(atp_read_limits)))
         {
             accessTimingParameter(true);
         }
@@ -338,9 +341,8 @@ int8_t KWP2000::initKline(uint8_t **p_p)
         {
             _debug->print(F("Reading current timing paramenters"));
         }
-        sendRequest(atp_read_current, LEN(atp_read_current));
-        listenResponse();
-        if (checkResponse(atp_read_current) == true)
+
+        if (handleRequest(atp_read_current, LEN(atp_read_current)))
         {
             accessTimingParameter();
             return 1; // end of the init sequence
@@ -380,9 +382,7 @@ int8_t KWP2000::stopKline(uint8_t **p_p, uint8_t *p_p_len)
             _debug->println(F("Closing K-line"));
         }
 
-        sendRequest(stop_com, LEN(stop_com));
-        listenResponse();
-        if (checkResponse(stop_com) == true)
+        if (handleRequest(stop_com, LEN(stop_com)))
         {
             //closed without problems
             _ECU_error = 0;
@@ -479,66 +479,41 @@ int8_t KWP2000::stopKline(uint8_t **p_p, uint8_t *p_p_len)
     }
 }
 
-void KWP2000::keepAlive(uint16_t time)
+int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len)
 {
-    if (_kline->available() > 0)
+    uint8_t attempt = 1;
+    uint8_t completed = false;
+    while (attempt <= 3 && completed == false)
     {
-        // the ECU wants to tell something
-        uint8_t in;
-        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        sendRequest(to_send, send_len);
+        listenResponse();
+        if (checkResponse(to_send) == true)
         {
-            _debug->println("Me:\nHave you said something?\nECU:");
+            completed = true;
         }
-        while (_kline->available() > 0)
+        else
         {
-            in = _kline->read();
             if (_debug_level == DEBUG_LEVEL_VERBOSE)
             {
-                _debug->println(in, HEX);
+                _debug->print(F("Attempt "));
+                _debug->print(attempt);
+                _debug->print(F(" not luckly"));
+                _debug->println(attempt < 3 ? ", trying again"
+                                            : "\nWe wasn't able to comunicate");
             }
+            attempt++;
         }
     }
 
-    if (_ECU_status == false)
+    if (completed == true)
     {
-        return; //if it is not connected it is meaningless to send a request
+        return true;
     }
-
-    if (millis() - _last_correct_response >= ISO_T_P3_MAX)
+    else
     {
-        // the connection has been lost
-        connectionExpired();
-        return;
+        // we made more than 3 attemps so there is a problem
+        return -1;
     }
-
-    if (time > ISO_T_P3_MAX)
-    {
-        // prevent human's errors
-        time = KEEP_ALIVE_TIME;
-        setError(EE_USER);
-    }
-
-    if (millis() - _last_correct_response <= time)
-    {
-        // not enough time has passed since last time we talked with the ECU
-        return;
-    }
-
-    if (_debug_level == DEBUG_LEVEL_VERBOSE)
-    {
-        _debug->print(F("\nKeeping connection alive\nLast:"));
-        _debug->println(millis() - _last_correct_response);
-    }
-#if defined(GSXR)
-    sendRequest(request_sens, LEN(request_sens));
-#elif defined(NINJA)
-    sendRequest(request_sens[0], LEN(request_sens[0][0]));
-#elif defined(CBR)
-    sendRequest(request_sens, LEN(request_sens));
-#elif defined(R)
-    sendRequest(request_sens, LEN(request_sens));
-#endif
-    listenResponse();
 }
 
 void KWP2000::requestSensorsData()
@@ -621,393 +596,269 @@ void KWP2000::requestSensorsData()
     //pair
     PAIR = _response[59];
     */
+
+// convert the temperature value if we are using them
+#ifdef FAHRENHEIT
+    _IAT = TO_FAHRENHEIT(_IAT);
+    _ECT = TO_FAHRENHEIT(_ECT);
+#endif
+
     _last_sensors_calculated = millis();
 }
 
-////////////// COMMUNICATION - Advanced ////////////////
-
-void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint8_t wait_to_send_all, const uint8_t use_delay)
+void KWP2000::keepAlive(uint16_t time)
 {
-    uint8_t echo = 0;
-    uint8_t header_len = 1; // minimun lenght
-
-    // create the request
-    // make the header
-    if (_use_lenght_byte == true)
+    if (_kline->available() > 0)
     {
-        //we use the lenth byte
-        _request[0] = format_physical;
-        _request[3] = pid_len;
-        header_len += 1;
-    }
-    else // don't use the lenght_byte
-    {
-        if (pid_len >= 64)
-        {
-            // we are forcet to use the lenght byte
-            _request[0] = format_physical;
-            _request[3] = pid_len;
-            header_len += 1;
-        }
-        else
-        {
-            // the lenght byte is "inside" the format
-            _request[0] = format_physical | pid_len;
-        }
-    }
-
-    if (_use_target_source_address == true)
-    {
-        // add target and source address
-        _request[1] = ECU_addr;
-        _request[2] = OUR_addr;
-        header_len += 2;
-    }
-
-    _request_len = header_len + pid_len + 1; // header + request + checksum
-
-    // add the PID
-    for (uint8_t k = 0; k < pid_len; k++)
-    {
-        _request[header_len + k] = pid[k];
-    }
-
-    // checksum
-    _request[_request_len - 1] = calc_checksum(_request, _request_len - 1);
-
-    // finally we send the request
-    _elapsed_time = 0;
-    for (uint8_t i = 0; i < _request_len; i++)
-    {
-        _kline->write(_request[i]);
-
-        _start_time = millis();
-        while (_elapsed_time < ISO_T_P4_MIN)
-        {
-            _elapsed_time = millis() - _start_time;
-            //Serial.println(_elapsed_time);
-            if (_kline->available() > 0)
-            {
-                echo = _kline->read();
-                _debug->print("e");
-                _debug->println(echo, HEX);
-            }
-        }
-        _elapsed_time = 0;
-
+        // the ECU wants to tell something
+        uint8_t in;
         if (_debug_level == DEBUG_LEVEL_VERBOSE)
         {
-            if (i == 0)
-            {
-                _debug->println(F("\nSending - Echo"));
-            }
-            _debug->print(_request[i], HEX);
-            _debug->print(F("\t\t-\t"));
-            _debug->println(echo, HEX);
+            _debug->println("Me:\nHave you said something?\nECU:");
         }
-
-        //check if i send the correct bytes
-        if (echo != _request[i] && echo != 0)
+        while (_kline->available() > 0)
         {
-            setError(EE_ECHO);
+            in = _kline->read();
+            if (_debug_level == DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->println(in, HEX);
+            }
         }
     }
-    _start_time = 0;
 
-    if (wait_to_send_all == true)
+    if (_ECU_status == false)
     {
-        _kline->flush();
+        return; //if it is not connected it is meaningless to send a request
     }
 
-    if (use_delay == true)
+    if (millis() - _last_correct_response >= ISO_T_P3_MAX)
     {
-        delay(ISO_T_P2_MIN);
+        // the connection has been lost
+        connectionExpired();
+        return;
+    }
+
+    if (time == 0)
+    {
+        time = _keep_iso_alive;
+    }
+
+    if (time > ISO_T_P3_MAX)
+    {
+        // prevent human's errors
+        time = _keep_iso_alive;
+        setError(EE_USER);
+    }
+
+    if (millis() - _last_correct_response <= time)
+    {
+        // not enough time has passed since last time we talked with the ECU
+        return;
+    }
+
+    if (_debug_level == DEBUG_LEVEL_VERBOSE)
+    {
+        _debug->print(F("\nKeeping connection alive\nLast:"));
+        _debug->println(millis() - _last_correct_response);
+    }
+#if defined(GSXR)
+    sendRequest(request_sens, LEN(request_sens));
+#elif defined(NINJA)
+    sendRequest(request_sens[0], LEN(request_sens[0][0]));
+#elif defined(CBR)
+    sendRequest(request_sens, LEN(request_sens));
+#elif defined(R)
+    sendRequest(request_sens, LEN(request_sens));
+#endif
+    listenResponse();
+}
+
+////////////// COMMUNICATION - Advanced ////////////////
+void KWP2000::accessTimingParameter(const uint8_t read_only)
+{
+    uint8_t p2_min_temp = _response[_response_data_start + 2];
+    uint16_t p3_min_temp = _response[_response_data_start + 4];
+    uint16_t p4_min_temp = _response[_response_data_start + 6];
+
+    uint32_t p2_max_temp = _response[_response_data_start + 3];
+    if (p2_max_temp <= 0xF0)
+    {
+        p2_max_temp *= 25;
+    }
+    else if ((p2_max_temp > 0xF0) && (p2_max_temp < 0xFF))
+    {
+        p2_max_temp = (p2_max_temp & 0xF) * 256 * 25;
+    }
+    else if (p2_max_temp == 0xFF)
+    {
+        p2_max_temp = 89601;
+        setError(EE_ATP);
+    }
+
+    uint32_t p3_max_temp = _response[_response_data_start + 5];
+    if (p3_max_temp <= 0xF0)
+    {
+        p3_max_temp *= 25;
+    }
+    else if ((p3_max_temp > 0xF0) && (p3_max_temp < 0xFF))
+    {
+        p3_max_temp = (p3_max_temp & 0xF) * 256 * 25;
+    }
+    else if (p3_max_temp == 0xFF)
+    {
+        p3_max_temp = 89601;
+        setError(EE_ATP);
+    }
+
+    // any of these condition is an error
+    if ((p2_min_temp > p2_max_temp) || (p3_min_temp > p3_max_temp) || (p4_min_temp > ISO_T_P4_MAX_LIMIT) || (p3_min_temp < p4_min_temp))
+    {
+        setError(EE_ATP);
+    }
+
+    if (read_only == false)
+    {
+        ISO_T_P2_MIN = p2_min_temp;
+        ISO_T_P2_MAX = p2_max_temp;
+        ISO_T_P3_MIN = p3_min_temp;
+        ISO_T_P3_MAX = p3_max_temp;
+        ISO_T_P4_MIN = p4_min_temp;
+
+        // we set a safe margin to ask data enough often to the ECU
+        _keep_iso_alive = p3_max_temp / 4;
+    }
+
+    if (_debug_level == DEBUG_LEVEL_VERBOSE)
+    {
+        _debug->println(F("Timing Parameter from the ECU:"));
+        _debug->print("Errors:\t");
+        _debug->println(bitRead(_ECU_error, EE_ATP) == 1 ? "Yes" : "No");
+        _debug->print(F("P2 min:\t"));
+        _debug->println(p2_min_temp);
+        _debug->print(F("P2 max:\t"));
+        _debug->println(p2_max_temp);
+        _debug->print(F("P3 min:\t"));
+        _debug->println(p3_min_temp);
+        _debug->print(F("P3 max:\t"));
+        _debug->println(p3_max_temp);
+        _debug->print(F("P4 min:\t"));
+        _debug->println(p4_min_temp);
+        _debug->println();
     }
 }
 
-void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use_delay)
+void KWP2000::changeTimingParameter(uint32_t new_atp[], const uint8_t new_atp_len)
 {
-    // we passed only one of these two arguments
-    if ((resp == nullptr) ^ (resp_len == nullptr))
+    if ((new_atp == nullptr) || (new_atp_len == 0))
     {
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("Changing timing parameter not possible: wrong array or wrong lenght"));
+        }
         setError(EE_USER);
         return;
     }
 
-    uint8_t save = false;
-    if (resp != nullptr && resp_len != nullptr)
+    if (new_atp_len != 5)
     {
-        save = true;
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("The time paramenter should be an array of 5 elements"));
+        }
+        setError(EE_USER);
+        return;
     }
 
-    // reset _response
-    _response_data_start = 0;
-    _response_len = 0;
-    for (uint16_t i = 0; i < ISO_MAX_DATA; i++)
+    if (new_atp[0] > ISO_T_P2_MIN_LIMIT)
     {
-        _response[i] = 0;
-        if (save)
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
         {
-            resp[i] = 0;
+            _debug->println(F("P2 min too hight"));
+        }
+        return;
+    }
+
+    if (new_atp[1] > ISO_T_P2_MAX_LIMIT)
+    {
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("P2 max too hight"));
+        }
+        return;
+    }
+
+    if (new_atp[2] > 255)
+    {
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("P3 min too hight"));
+        }
+        return;
+    }
+
+    if (new_atp[3] > ISO_T_P3_MAX_LIMIT)
+    {
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("P3 max too hight"));
+        }
+        return;
+    }
+
+    if (new_atp[4] > ISO_T_P4_MAX_LIMIT)
+    {
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("P4 min too hight"));
+        }
+        return;
+    }
+    // all check passed
+
+    // convert the data if P2 and P3 max are too high for a tiny byte
+    uint32_t p2_max_temp = new_atp[1];
+    uint32_t p3_max_temp = new_atp[3];
+
+    if (p2_max_temp <= 6000)
+    {
+        p2_max_temp = p2_max_temp / 25;
+    }
+    else if (p2_max_temp > 6000)
+    {
+        p2_max_temp = (p2_max_temp / 256 / 25) | 0xf0;
+    }
+    new_atp[1] = p2_max_temp;
+
+    if (p3_max_temp <= 6000)
+    {
+        p3_max_temp = p3_max_temp / 25;
+    }
+    else if (p3_max_temp > 6000)
+    {
+        p3_max_temp = (p3_max_temp / 256 / 25) | 0xf0;
+    }
+    new_atp[3] = p3_max_temp;
+
+    // we need to create a new array made from the atp_set_given + new_atp + checksum
+    uint8_t pid_temp[7];
+    for (uint8_t n = 0; n < 7; n++)
+    {
+        if (n < 2) // atp_set_given
+        {
+            pid_temp[n] = atp_set_given[n];
+        }
+        else // new_atp
+        {
+            pid_temp[n] = new_atp[n - 2];
         }
     }
 
-    uint8_t masked = 0;                     // useful for bit mask operation
-    uint8_t response_completed = false;     // when true no more bytes will be received
-    uint32_t incoming;                      // incoming byte from the ECU
-    uint8_t n_byte = 0;                     // actual lenght of the response, updated every times a new byte is received
-    uint8_t data_to_rcv = 0;                // data to receive: bytes of the response that have to be received (not received yet)
-    uint8_t data_rcvd = 0;                  // data received: bytes of the response already received
-    uint32_t last_data_received = millis(); // check times for the timeout
+    // send it
+    sendRequest(pid_temp, LEN(pid_temp));
+    listenResponse();
 
-    while ((millis() - last_data_received < ISO_T_P3_mdf) && (response_completed == false))
-    {
-        if (_kline->available() > 0)
-        {
-            incoming = _kline->read();
-            _response[n_byte] = incoming;
-            if (save)
-            {
-                resp[n_byte] = incoming;
-            }
-
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                if (n_byte == 0)
-                {
-                    _debug->print(F("\nReceiving:"));
-                }
-                _debug->print(F("\n"));
-                _debug->print(incoming, HEX);
-            }
-
-            last_data_received = millis(); // reset the timer for each byte received
-
-            // Technically the ECU waits between 0 to 20 ms between sending two bytes
-            // We use this time to analyze what we received
-            // delay(ISO_T_P1);
-
-            switch (n_byte)
-            {
-            case 0: // the first byte is the formatter, with or without lenght bits
-
-                masked = incoming & 0xC0; // 0b11000000
-                if (masked == format_physical)
-                {
-                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                    {
-                        _debug->print(F("\t- format physical"));
-                    }
-                }
-                else if (masked == format_functional)
-                {
-                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                    {
-                        _debug->print(F("\t- format functional"));
-                    }
-                    setError(EE_US);
-                }
-                else if (masked == format_CARB)
-                {
-                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                    {
-                        _debug->print(F("\t- format CARB"));
-                    }
-                    setError(EE_US);
-                }
-                else
-                {
-                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                    {
-                        _debug->print(F("\t- unexpected header"));
-                    }
-                    setError(EE_HEADER);
-                }
-
-                masked = incoming & 0x3F; // 0b00111111
-                if (masked != 0)
-                {
-                    data_to_rcv = masked; // the response lengh is inside the formatter
-                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                    {
-                        _debug->print(F("\t- "));
-                        _debug->print(data_to_rcv);
-                        _debug->print(F(" data bytes coming"));
-                    }
-                }
-                else
-                {
-                    data_to_rcv = 0; // the response lenght is in a separete byte (the 2nd or the 4th)
-                }
-                break;
-
-            case 1: // the second byte is be the target address or the lenght byte or the data
-
-                if (_use_target_source_address == true)
-                {
-                    if (incoming == OUR_addr) // it is the target byte
-                    {
-                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                        {
-                            _debug->print(F("\t- ECU is communicating with us"));
-                        }
-                    }
-                    else
-                    {
-                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                        {
-                            // (I'm not jealous it's just curiosity)
-                            _debug->print(F("\t- ECU is communicating with this address"));
-                        }
-                        setError(EE_TO);
-                    }
-                }
-                else // ECU doesn't use target and source address
-                {
-                    if (data_to_rcv == 0) // it is the lenght byte
-                    {
-                        data_to_rcv = incoming;
-                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                        {
-                            _debug->print(F("\t- "));
-                            _debug->print(data_to_rcv);
-                            _debug->print(F(" data bytes coming"));
-                        }
-                    }
-                    else // data
-                    {
-                        data_rcvd++;
-                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                        {
-                            _debug->print(F("\t- data"));
-                        }
-                        if (_response_data_start == 0)
-                        {
-                            _response_data_start = n_byte;
-                        }
-                    }
-                }
-                break;
-
-            case 2: // the third byte is the source address or the data or checksum
-
-                if (_use_target_source_address == true)
-                {
-                    if (incoming == ECU_addr)
-                    {
-                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                        {
-                            _debug->print(F("\t- comes from the ECU"));
-                        }
-                    }
-                    else
-                    {
-                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                        {
-                            // check who sent it
-                            _debug->print(F("\t- doesn't come from the ECU"));
-                        }
-                        setError(EE_FROM);
-                    }
-                }
-                else // data or checksum
-                {
-                    if (data_to_rcv == data_rcvd) // it is the checksum
-                    {
-                        response_completed = true;
-                        _response_len = n_byte;
-                        if (save)
-                        {
-                            *resp_len = n_byte;
-                        }
-                        endResponse(incoming);
-                    }
-                    else // there is still data outside
-                    {
-                        data_rcvd++;
-                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                        {
-                            _debug->print(F("\t- data"));
-                        }
-                        if (_response_data_start == 0)
-                        {
-                            _response_data_start = n_byte;
-                        }
-                    }
-                }
-                break;
-
-            case 3: // the fourth byte is the lenght byte or the data or checksum
-
-                if (data_to_rcv == 0) // it is the lenght byte
-                {
-                    data_to_rcv = incoming;
-                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                    {
-                        _debug->print(F("\t- data bytes coming in HEX"));
-                    }
-                }
-                else // data or checksum
-                {
-                    if (data_to_rcv == data_rcvd) // it is the checksum
-                    {
-                        response_completed = true;
-                        _response_len = n_byte;
-                        if (save)
-                        {
-                            *resp_len = n_byte;
-                        }
-                        endResponse(incoming);
-                    }
-                    else // data
-                    {
-                        data_rcvd++;
-                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                        {
-                            _debug->print(F("\t- data"));
-                        }
-                        if (_response_data_start == 0)
-                        {
-                            _response_data_start = n_byte;
-                        }
-                    }
-                }
-                break;
-
-            default: // data or checksum
-
-                if (data_to_rcv == data_rcvd) // it is the checksum
-                {
-                    response_completed = true;
-                    _response_len = n_byte;
-                    if (save)
-                    {
-                        *resp_len = n_byte;
-                    }
-                    endResponse(incoming);
-                }
-                else // data
-                {
-                    data_rcvd++;
-                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                    {
-                        _debug->print(F("\t- data"));
-                    }
-                    if (_response_data_start == 0)
-                    {
-                        _response_data_start = n_byte;
-                    }
-                }
-                break;
-            }         // end of the swith statement
-            n_byte++; // read the next byte of the response
-        }             // end of the if _kline.available()
-    }                 // end of the while timeout
-
-    if (use_delay == true)
-    {
-        delay(ISO_T_P3_MIN);
-    }
+    // check if our values has been setted correctly
+    accessTimingParameter(true);
 }
 
 /////////////////// PRINT and GET ///////////////////////
@@ -1268,228 +1119,408 @@ uint8_t KWP2000::getSTPS()
 
 /////////////////// PRIVATE ///////////////////////
 
-void KWP2000::setError(const uint8_t error)
+void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint8_t wait_to_send_all, const uint8_t use_delay)
 {
-    bitSet(_ECU_error, error);
-}
+    uint8_t echo = 0;
+    uint8_t header_len = 1; // minimun lenght
 
-void KWP2000::configureKline()
-{
-    // get the key bytes
-    if (_response[_response_data_start + 2] != 0x8F)
+    // create the request
+    // make the header
+    if (_use_lenght_byte == true)
     {
-        setError(EE_CONFIG);
+        //we use the lenth byte
+        _request[0] = format_physical;
+        _request[3] = pid_len;
+        header_len += 1;
     }
-
-    uint16_t key_bytes = _response[_response_data_start + 2] << 8 | _response[_response_data_start + 1];
-
-    // lenght byte
-    uint8_t AL0 = bitRead(key_bytes, 0);
-    uint8_t AL1 = bitRead(key_bytes, 1);
-    if (AL1 == 1 && AL0 == 1)
+    else // don't use the lenght_byte
     {
-        // both are possible, so choose the faster one
-        _use_lenght_byte = false;
-    }
-    else if (AL1 == 1 && AL0 == 0)
-    {
-        // lenght byte must be present
-        _use_lenght_byte = true;
-    }
-    else if (AL1 == 0 && AL0 == 1)
-    {
-        // lenght byte not needed
-        _use_lenght_byte = false;
-    }
-
-    // target and source
-    uint8_t HB0 = bitRead(key_bytes, 2);
-    uint8_t HB1 = bitRead(key_bytes, 3);
-    if (HB1 == 1 && HB0 == 1)
-    {
-        // both are possible, so choose the faster one
-        _use_target_source_address = false;
-    }
-    else if (HB1 == 1 && HB0 == 0)
-    {
-        // target and source address bytes must be present
-        _use_target_source_address = true;
-    }
-    else if (HB1 == 0 && HB0 == 1)
-    {
-        // target and source address bytes not needed
-        _use_target_source_address = false;
-    }
-
-    // timing
-    uint8_t TP0 = bitRead(key_bytes, 4);
-    uint8_t TP1 = bitRead(key_bytes, 5);
-    if (TP1 == 1 && TP0 == 1)
-    {
-        setError(EE_CONFIG);
-    }
-    else if (TP1 == 1 && TP0 == 0)
-    {
-        _timing_parameter = true; // normal
-    }
-    else if (TP1 == 0 && TP0 == 1)
-    {
-        _timing_parameter = false; // extended
-        // this allow faster comunication but I didn't implement it yet
-        setError(EE_US);
-    }
-
-    if (AL0 == 0 && AL1 == 0 && HB0 == 0 && HB1 == 0 && TP0 == 1 && TP1 == 0)
-    {
-        // it will use the same configuration as in the first response
-        // todo: i need to set these values in listenResponse()
-        setError(EE_US);
-    }
-
-    // must be 1
-    if (bitRead(key_bytes, 6) != 1)
-    {
-        setError(EE_CONFIG);
-    }
-
-    // parity of the 6 bits above
-    uint8_t parity = 1;
-    for (uint8_t n = 0; n < 7; n++)
-    {
-        if (bitRead(key_bytes, n))
+        if (pid_len >= 64)
         {
-            parity = !parity;
-        }
-    }
-
-    if (bitRead(key_bytes, 7) != parity)
-    {
-        setError(EE_CONFIG);
-    }
-
-    if (_debug_level == DEBUG_LEVEL_VERBOSE)
-    {
-        _debug->println("\nK line config:");
-        _debug->print("Key bytes:\t\t\t0x");
-        _debug->print(key_bytes, HEX);
-        _debug->print(" - ");
-        _debug->println(key_bytes, BIN);
-        _debug->print("Errors:\t\t\t\t");
-        _debug->println(bitRead(_ECU_error, EE_CONFIG) == 1 ? "Yes" : "No");
-        _debug->print("Lenght byte:\t\t");
-        _debug->println(_use_lenght_byte == 1 ? "Yes" : "No");
-        _debug->print("Addresses bytes:\t");
-        _debug->println(_use_target_source_address == 1 ? "Yes" : "No");
-        _debug->print("Timing parameter:\t");
-        _debug->println(_timing_parameter == 1 ? "Normal\n" : "Extended\n");
-    }
-}
-
-void KWP2000::accessTimingParameter(const uint8_t read_only)
-{
-    uint8_t p2_min_temp = _response[_response_data_start + 2];
-    uint16_t p3_min_temp = _response[_response_data_start + 4];
-    uint16_t p4_min_temp = _response[_response_data_start + 6];
-
-    uint32_t p2_max_temp = _response[_response_data_start + 3];
-    if (p2_max_temp <= 0xF0)
-    {
-        p2_max_temp *= 25;
-    }
-    else if ((p2_max_temp > 0xF0) && (p2_max_temp < 0xFF))
-    {
-        p2_max_temp = (p2_max_temp & 0xF) * 256 * 25;
-    }
-    else if (p2_max_temp == 0xFF)
-    {
-        p2_max_temp = 89601;
-        setError(EE_ATP);
-    }
-
-    uint32_t p3_max_temp = _response[_response_data_start + 5];
-    _debug->print("Original P3 MAX:\n0x");
-    _debug->println(p3_max_temp, HEX);
-    _debug->println(p3_max_temp);
-    if (p3_max_temp <= 0xF0)
-    {
-        p3_max_temp *= 25;
-    }
-    else if ((p3_max_temp > 0xF0) && (p3_max_temp < 0xFF))
-    {
-        p3_max_temp = (p3_max_temp & 0xF) * 256 * 25;
-    }
-    else if (p3_max_temp == 0xFF)
-    {
-        p3_max_temp = 89601;
-        setError(EE_ATP);
-    }
-
-    // any of these condition is an error
-    if ((p2_min_temp > p2_max_temp) || (p3_min_temp > p3_max_temp) || (p4_min_temp > ISO_T_P4_MAX) || (p3_min_temp < p4_min_temp))
-    {
-        setError(EE_ATP);
-    }
-
-    if (read_only == false)
-    {
-        ISO_T_P2_MIN = p2_min_temp;
-        ISO_T_P2_MAX = p2_max_temp;
-        ISO_T_P3_MIN = p3_min_temp;
-        ISO_T_P3_MAX = p3_max_temp;
-        ISO_T_P4_MIN = p4_min_temp;
-    }
-
-    if (_debug_level == DEBUG_LEVEL_VERBOSE)
-    {
-        _debug->println(F("Timing Parameter from the ECU:"));
-        _debug->print("Errors:\t");
-        _debug->println(bitRead(_ECU_error, EE_ATP) == 1 ? "Yes" : "No");
-        _debug->print(F("P2 min:\t"));
-        _debug->println(p2_min_temp);
-        _debug->print(F("P2 max:\t"));
-        _debug->println(p2_max_temp);
-        _debug->print(F("P3 min:\t"));
-        _debug->println(p3_min_temp);
-        _debug->print(F("P3 max:\t"));
-        _debug->println(p3_max_temp);
-        _debug->print(F("P4 min:\t"));
-        _debug->println(p4_min_temp);
-        _debug->println();
-    }
-}
-
-void KWP2000::changeTimingParameter(uint8_t new_atp[], const uint8_t new_atp_len)
-{
-    if ((new_atp != nullptr) && (new_atp_len != 0)) // we sent an array to change the time paramenters
-    {
-        if (new_atp_len != 5)
-        {
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                _debug->println(F("The time paramenter should be an array of 5 elements"));
-            }
-            setError(EE_USER);
-            return;
+            // we are forcet to use the lenght byte
+            _request[0] = format_physical;
+            _request[3] = pid_len;
+            header_len += 1;
         }
         else
         {
-            // change the time parameter
-            // we need to create a new array made from atp_set_given + new_atp + checksum
-            setError(EE_US);
+            // the lenght byte is "inside" the format
+            _request[0] = format_physical | pid_len;
         }
+    }
+
+    if (_use_target_source_address == true)
+    {
+        // add target and source address
+        _request[1] = ECU_addr;
+        _request[2] = OUR_addr;
+        header_len += 2;
+    }
+
+    _request_len = header_len + pid_len + 1; // header + request + checksum
+
+    // add the PID
+    for (uint8_t k = 0; k < pid_len; k++)
+    {
+        _request[header_len + k] = pid[k];
+    }
+
+    // checksum
+    _request[_request_len - 1] = calc_checksum(_request, _request_len - 1);
+
+    // finally we send the request
+    _elapsed_time = 0;
+    for (uint8_t i = 0; i < _request_len; i++)
+    {
+        _kline->write(_request[i]);
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            if (i == 0)
+            {
+                _debug->println(F("\nSending\t\tEcho"));
+            }
+            _debug->println(_request[i], HEX);
+        }
+
+        _start_time = millis();
+        while (_elapsed_time < ISO_T_P4_MIN)
+        {
+            _elapsed_time = millis() - _start_time;
+            if (_kline->available() > 0)
+            {
+                echo = _kline->read();
+                _debug->print("\t\t\t");
+                _debug->println(echo, HEX);
+            }
+        }
+        _elapsed_time = 0;
+
+        //check if i send the correct bytes
+        if (echo != _request[i] && echo != 0)
+        {
+            setError(EE_ECHO);
+        }
+    }
+    _start_time = 0;
+
+    if (wait_to_send_all == true)
+    {
+        _kline->flush();
+    }
+
+    if (use_delay == true)
+    {
+        delay(ISO_T_P2_MIN);
     }
 }
 
-// Checksum is the sum of all data bytes modulo (&) 0xFF
-// (same as being truncated to one byte)
-uint8_t KWP2000::calc_checksum(const uint8_t data[], const uint8_t data_len)
+void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use_delay)
 {
-    uint8_t cs = 0;
-    for (uint8_t i = 0; i < data_len; i++)
+    // we passed only one of these two arguments
+    if ((resp == nullptr) ^ (resp_len == nullptr))
     {
-        cs += data[i];
+        setError(EE_USER);
+        return;
     }
-    return cs;
+
+    uint8_t save = false;
+    if (resp != nullptr && resp_len != nullptr)
+    {
+        save = true;
+    }
+
+    // reset _response
+    _response_data_start = 0;
+    _response_len = 0;
+    for (uint16_t i = 0; i < ISO_MAX_DATA; i++)
+    {
+        _response[i] = 0;
+        if (save)
+        {
+            resp[i] = 0;
+        }
+    }
+
+    uint8_t masked = 0;                     // useful for bit mask operation
+    uint8_t response_completed = false;     // when true no more bytes will be received
+    uint32_t incoming;                      // incoming byte from the ECU
+    uint8_t n_byte = 0;                     // actual lenght of the response, updated every times a new byte is received
+    uint8_t data_to_rcv = 0;                // data to receive: bytes of the response that have to be received (not received yet)
+    uint8_t data_rcvd = 0;                  // data received: bytes of the response already received
+    uint32_t last_data_received = millis(); // check times for the timeout
+
+    while ((millis() - last_data_received < ISO_T_P3_mdf) && (response_completed == false))
+    {
+        if (_kline->available() > 0)
+        {
+            incoming = _kline->read();
+            _response[n_byte] = incoming;
+            if (save)
+            {
+                resp[n_byte] = incoming;
+            }
+
+            if (_debug_level == DEBUG_LEVEL_VERBOSE)
+            {
+                if (n_byte == 0)
+                {
+                    _debug->print(F("\nReceiving:"));
+                }
+                _debug->print(F("\n"));
+                _debug->print(incoming, HEX);
+            }
+
+            last_data_received = millis(); // reset the timer for each byte received
+
+            // delay(ISO_T_P1);
+            // Technically the ECU waits between 0 to 20 ms between sending two bytes
+            // We use this time to analyze what we received
+
+            switch (n_byte)
+            {
+            case 0: // the first byte is the formatter, with or without lenght bits
+
+                masked = incoming & 0xC0; // 0b11000000
+                if (masked == format_physical)
+                {
+                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                    {
+                        _debug->print(F("\t- format physical"));
+                    }
+                }
+                else if (masked == format_functional)
+                {
+                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                    {
+                        _debug->print(F("\t- format functional"));
+                    }
+                    setError(EE_US);
+                }
+                else if (masked == format_CARB)
+                {
+                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                    {
+                        _debug->print(F("\t- format CARB"));
+                    }
+                    setError(EE_US);
+                }
+                else
+                {
+                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                    {
+                        _debug->print(F("\t- unexpected header"));
+                    }
+                    setError(EE_HEADER);
+                }
+
+                // let's see if there are lenght bits
+                if (_use_lenght_byte == true || _use_lenght_byte == maybe)
+                {
+                    masked = incoming & 0x3F; // 0b00111111
+                    if (masked != 0)          // the response lengh is inside the formatter
+                    {
+                        data_to_rcv = masked;
+                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                        {
+                            _debug->print(F("\t- "));
+                            _debug->print(data_to_rcv);
+                            _debug->print(F(" data bytes coming"));
+                        }
+
+                        if (_use_lenght_byte == maybe)
+                        {
+                            _use_lenght_byte = false;
+                            setError(EE_TEST);
+                        }
+                    }
+                    else // the response lenght is in a separete byte (the 2nd or the 4th)
+                    {
+                        data_to_rcv = 0;
+                    }
+                }
+                break;
+
+            case 1: // the second byte is be the target address or the lenght byte or the data
+
+                if (_use_target_source_address == maybe)
+                {
+                    if (incoming == OUR_addr)
+                    {
+                        _use_target_source_address = true;
+                        setError(EE_TEST);
+                    }
+                    else
+                    {
+                        _use_target_source_address = false;
+                        setError(EE_TEST);
+                    }
+                }
+
+                if (_use_target_source_address == true)
+                {
+                    if (incoming == OUR_addr) // it is the target byte
+                    {
+                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                        {
+                            _debug->print(F("\t- ECU is communicating with us"));
+                        }
+                    }
+                    else
+                    {
+                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                        {
+                            // (I'm not jealous it's just curiosity)
+                            _debug->print(F("\t- ECU is communicating with this address"));
+                        }
+                        setError(EE_TO);
+                    }
+                }
+                else if (_use_target_source_address == false)
+                {
+                    if (data_to_rcv == 0) // it is the lenght byte
+                    {
+                        data_to_rcv = incoming;
+                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                        {
+                            _debug->print(F("\t- "));
+                            _debug->print(data_to_rcv);
+                            _debug->print(F(" data bytes coming"));
+                        }
+                    }
+                    else // data
+                    {
+                        data_rcvd++;
+                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                        {
+                            _debug->print(F("\t- data"));
+                        }
+                        if (_response_data_start == 0)
+                        {
+                            _response_data_start = n_byte;
+                        }
+                    }
+                }
+                break;
+
+            case 2: // the third byte is the source address or the data or checksum
+
+                if (_use_target_source_address == true)
+                {
+                    if (incoming == ECU_addr)
+                    {
+                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                        {
+                            _debug->print(F("\t- comes from the ECU"));
+                        }
+                    }
+                    else
+                    {
+                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                        {
+                            // check who sent it
+                            _debug->print(F("\t- doesn't come from the ECU"));
+                        }
+                        setError(EE_FROM);
+                    }
+                }
+                else // data or checksum
+                {
+                    if (data_to_rcv == data_rcvd) // it is the checksum
+                    {
+                        response_completed = true;
+                        _response_len = n_byte;
+                        if (save)
+                        {
+                            *resp_len = n_byte;
+                        }
+                        endResponse(incoming);
+                    }
+                    else // there is still data outside
+                    {
+                        data_rcvd++;
+                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                        {
+                            _debug->print(F("\t- data"));
+                        }
+                        if (_response_data_start == 0)
+                        {
+                            _response_data_start = n_byte;
+                        }
+                    }
+                }
+                break;
+
+            case 3: // the fourth byte is the lenght byte or the data or checksum
+
+                if (data_to_rcv == 0) // it is the lenght byte
+                {
+                    data_to_rcv = incoming;
+                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                    {
+                        _debug->print(F("\t- data bytes coming in HEX"));
+                    }
+                }
+                else // data or checksum
+                {
+                    if (data_to_rcv == data_rcvd) // it is the checksum
+                    {
+                        response_completed = true;
+                        _response_len = n_byte;
+                        if (save)
+                        {
+                            *resp_len = n_byte;
+                        }
+                        endResponse(incoming);
+                    }
+                    else // data
+                    {
+                        data_rcvd++;
+                        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                        {
+                            _debug->print(F("\t- data"));
+                        }
+                        if (_response_data_start == 0)
+                        {
+                            _response_data_start = n_byte;
+                        }
+                    }
+                }
+                break;
+
+            default: // data or checksum
+
+                if (data_to_rcv == data_rcvd) // it is the checksum
+                {
+                    response_completed = true;
+                    _response_len = n_byte;
+                    if (save)
+                    {
+                        *resp_len = n_byte;
+                    }
+                    endResponse(incoming);
+                }
+                else // data
+                {
+                    data_rcvd++;
+                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
+                    {
+                        _debug->print(F("\t- data"));
+                    }
+                    if (_response_data_start == 0)
+                    {
+                        _response_data_start = n_byte;
+                    }
+                }
+                break;
+            }         // end of the swith statement
+            n_byte++; // read the next byte of the response
+        }             // end of the if _kline.available()
+    }                 // end of the while timeout
+
+    if (use_delay == true)
+    {
+        delay(ISO_T_P3_MIN);
+    }
 }
 
 int8_t KWP2000::checkResponse(const uint8_t response_sent[])
@@ -1567,9 +1598,139 @@ int8_t KWP2000::checkResponse(const uint8_t response_sent[])
     return -9;
 }
 
+void KWP2000::setError(const uint8_t error)
+{
+    bitSet(_ECU_error, error);
+}
+
+void KWP2000::configureKline()
+{
+    // get the key bytes
+    if (_response[_response_data_start + 2] != 0x8F)
+    {
+        setError(EE_CONFIG);
+    }
+
+    uint16_t key_bytes = _response[_response_data_start + 2] << 8 | _response[_response_data_start + 1];
+
+    // lenght byte
+    uint8_t AL0 = bitRead(key_bytes, 0);
+    uint8_t AL1 = bitRead(key_bytes, 1);
+    if (AL1 == 1 && AL0 == 1)
+    {
+        // both are possible, so choose the faster one
+        _use_lenght_byte = false;
+    }
+    else if (AL1 == 1 && AL0 == 0)
+    {
+        // lenght byte must be present
+        _use_lenght_byte = true;
+    }
+    else if (AL1 == 0 && AL0 == 1)
+    {
+        // lenght byte not needed
+        _use_lenght_byte = false;
+    }
+
+    // target and source
+    uint8_t HB0 = bitRead(key_bytes, 2);
+    uint8_t HB1 = bitRead(key_bytes, 3);
+    if (HB1 == 1 && HB0 == 1)
+    {
+        // both are possible, so choose the faster one
+        _use_target_source_address = false;
+    }
+    else if (HB1 == 1 && HB0 == 0)
+    {
+        // target and source address bytes must be present
+        _use_target_source_address = true;
+    }
+    else if (HB1 == 0 && HB0 == 1)
+    {
+        // target and source address bytes not needed
+        _use_target_source_address = false;
+    }
+
+    // timing
+    uint8_t TP0 = bitRead(key_bytes, 4);
+    uint8_t TP1 = bitRead(key_bytes, 5);
+    if (TP1 == 1 && TP0 == 1)
+    {
+        setError(EE_CONFIG);
+    }
+    else if (TP1 == 1 && TP0 == 0)
+    {
+        _timing_parameter = true; // normal
+    }
+    else if (TP1 == 0 && TP0 == 1)
+    {
+        _timing_parameter = false; // extended
+        // this allow faster comunication but I don't plan to implement it soon
+        setError(EE_US);
+    }
+
+    if (AL0 == 0 && AL1 == 0 && HB0 == 0 && HB1 == 0 && TP0 == 1 && TP1 == 0)
+    {
+        // it will use the same configuration as in the first response
+        _use_lenght_byte = maybe;
+        _use_target_source_address = maybe;
+        _timing_parameter = maybe;
+    }
+
+    // must be 1
+    if (bitRead(key_bytes, 6) != 1)
+    {
+        setError(EE_CONFIG);
+    }
+
+    // parity of the 6 bits above
+    uint8_t parity = 1;
+    for (uint8_t n = 0; n < 7; n++)
+    {
+        if (bitRead(key_bytes, n))
+        {
+            parity = !parity;
+        }
+    }
+
+    if (bitRead(key_bytes, 7) != parity)
+    {
+        setError(EE_CONFIG);
+    }
+
+    if (_debug_level == DEBUG_LEVEL_VERBOSE)
+    {
+        _debug->println("\nK line config:");
+        _debug->print("Key bytes:\t\t\t0x");
+        _debug->print(key_bytes, HEX);
+        _debug->print(" - ");
+        _debug->println(key_bytes, BIN);
+        _debug->print("Errors:\t\t\t\t");
+        _debug->println(bitRead(_ECU_error, EE_CONFIG) == 1 ? "Yes" : "No");
+        _debug->print("Lenght byte:\t\t");
+        _debug->println(_use_lenght_byte == 1 ? "Yes" : "No");
+        _debug->print("Addresses bytes:\t");
+        _debug->println(_use_target_source_address == 1 ? "Yes" : "No");
+        _debug->print("Timing parameter:\t");
+        _debug->println(_timing_parameter == 1 ? "Normal\n" : "Extended\n");
+    }
+}
+
+// Checksum is the sum of all data bytes modulo (&) 0xFF
+// (same as being truncated to one byte)
+uint8_t KWP2000::calc_checksum(const uint8_t data[], const uint8_t data_len)
+{
+    uint8_t cs = 0;
+    for (uint8_t i = 0; i < data_len; i++)
+    {
+        cs += data[i];
+    }
+    return cs;
+}
+
 void KWP2000::endResponse(const uint8_t received_checksum)
 {
-    uint8_t checksum;
+    uint8_t correct_checksum;
 
     if (_debug_level == DEBUG_LEVEL_VERBOSE)
     {
@@ -1579,8 +1740,8 @@ void KWP2000::endResponse(const uint8_t received_checksum)
         _debug->println(_response_len);
     }
 
-    checksum = calc_checksum(_response, _response_len);
-    if (checksum == received_checksum)
+    correct_checksum = calc_checksum(_response, _response_len);
+    if (correct_checksum == received_checksum)
     {
         // the checksum is correct and everything went well!
         if (_debug_level == DEBUG_LEVEL_VERBOSE)
@@ -1594,7 +1755,7 @@ void KWP2000::endResponse(const uint8_t received_checksum)
         if (_debug_level == DEBUG_LEVEL_VERBOSE)
         {
             _debug->print(F("Wrong checksum, expected: "));
-            _debug->println(checksum, HEX);
+            _debug->println(correct_checksum, HEX);
         }
         setError(EE_CS);
     }
