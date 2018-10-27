@@ -298,7 +298,7 @@ int8_t KWP2000::initKline(uint8_t **p_p)
         _elapsed_time = 0;
         _kline->begin(_kline_baudrate, SERIAL_8O1);
 
-        if (handleRequest(start_com, LEN(start_com)))
+        if (handleRequest(start_com, LEN(start_com)) == true)
         {
             if (_debug_level >= DEBUG_LEVEL_DEFAULT)
             {
@@ -325,7 +325,7 @@ int8_t KWP2000::initKline(uint8_t **p_p)
         {
             _debug->print(F("Reading timing limits"));
         }
-        if (handleRequest(atp_read_limits, LEN(atp_read_limits)))
+        if (handleRequest(atp_read_limits, LEN(atp_read_limits)) == true)
         {
             accessTimingParameter(true);
         }
@@ -342,7 +342,7 @@ int8_t KWP2000::initKline(uint8_t **p_p)
             _debug->print(F("Reading current timing paramenters"));
         }
 
-        if (handleRequest(atp_read_current, LEN(atp_read_current)))
+        if (handleRequest(atp_read_current, LEN(atp_read_current)) == true)
         {
             accessTimingParameter();
             return 1; // end of the init sequence
@@ -382,7 +382,7 @@ int8_t KWP2000::stopKline(uint8_t **p_p, uint8_t *p_p_len)
             _debug->println(F("Closing K-line"));
         }
 
-        if (handleRequest(stop_com, LEN(stop_com)))
+        if (handleRequest(stop_com, LEN(stop_com)) == true)
         {
             //closed without problems
             _ECU_error = 0;
