@@ -32,11 +32,7 @@ Generally the functions return `true` if everything went fine, a `negative numbe
 
 # Documentation
 
-<<<<<<< HEAD
 ## This is changing a lot, until versione 1.0.0 I won't update this documentation again so ask me or read the code
-=======
-## This is changing a lot, until versione 1.0.0 I won't update this documentation again so ask me or read the code
->>>>>>> a27930907b82055b7f73f5b7e223ea501225fb74
 
 ### KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint32_t kline_baudrate = 10400)
 **Constructor:** choose the serial port which will be used to talk with the ECU and the TX pin of this serial
