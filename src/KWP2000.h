@@ -37,6 +37,9 @@ more const from the iso
 remove these lines before commit
 check if te ecu is connected before some functions
 check all serial if have F
+discover how the hell works git and make a branch without pointers
+check verbose/default
+change library.properties
 */
 
 #ifndef KWP2000_h
@@ -44,6 +47,7 @@ check all serial if have F
 
 enum debug_enum // debug levels
 {
+    DEBUG_LEVEL_NONE,
     DEBUG_LEVEL_DEFAULT,
     DEBUG_LEVEL_VERBOSE
 };
@@ -55,7 +59,10 @@ class KWP2000
     KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint32_t kline_baudrate = 10400);
 
     // SETUP
-    void enableDebug(HardwareSerial *debug_serial, const uint32_t debug_baudrate = 115200, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT);
+    void enableDebug(HardwareSerial *debug_serial, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT, const uint32_t debug_baudrate = 115200);
+#if defined(ARDUINO_ARCH_STM32)
+    void enableDebug(USBSerial *debug_serial, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT, const uint32_t debug_baudrate = 115200);
+#endif
     void setDebugLevel(const uint8_t debug_level);
     void disableDebug();
     void enableDealerMode(const uint8_t dealer_pin);
@@ -64,12 +71,13 @@ class KWP2000
     // COMMUNICATION - Basic
     int8_t initKline(uint8_t **p_p = nullptr);
     int8_t stopKline(uint8_t **p_p = nullptr, uint8_t *p_p_len = nullptr);
-    int8_t handleRequest(const uint8_t to_send[], const uint8_t send_len);
     void requestSensorsData();
     void keepAlive(uint16_t time = 0);
 
     // COMMUNICATION - Advanced
-    void accessTimingParameter(const uint8_t read_only = false);
+    int8_t handleRequest(const uint8_t to_send[], const uint8_t send_len);
+    void accessTimingParameter(const uint8_t read_only = true);
+    void resetTimingParameter();
     void changeTimingParameter(uint32_t new_atp[] = nullptr, const uint8_t new_atp_len = 0);
 
     // PRINT and GET
@@ -122,7 +130,11 @@ class KWP2000
     uint16_t _keep_iso_alive = 1000;
 
     // debug
+#if defined(ARDUINO_ARCH_STM32)
+    USBSerial *_debug;
+#else
     HardwareSerial *_debug;
+#endif
     uint8_t _debug_enabled = false;
     uint32_t _debug_baudrate;
     uint8_t _debug_level = DEBUG_LEVEL_DEFAULT;
@@ -138,13 +150,14 @@ class KWP2000
 
     // functions
     void sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t wait_to_send_all = true, const uint8_t use_delay = true);
-    void listenResponse(uint8_t *resp = nullptr, uint8_t *resp_len = nullptr, const uint8_t use_delay = false);
+    void listenResponse(uint8_t *resp = nullptr, uint8_t *resp_len = nullptr, const uint8_t use_delay = true);
     int8_t checkResponse(const uint8_t response_sent[]);
     void setError(const uint8_t error);
+    void clearError(const uint8_t error);
     void configureKline();
     uint8_t calc_checksum(const uint8_t data[], const uint8_t data_len);
     void endResponse(const uint8_t received_checksum);
     void connectionExpired();
 };
 
-#endif
+#endif // KWP2000_h

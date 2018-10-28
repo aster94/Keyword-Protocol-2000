@@ -17,21 +17,7 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-/*
-$78 requestCorrectlyReceivedResponsePending
-This response code shall only be used by a server in case it
-cannot send a positive or negative response message based on the client's request message
-within the active P2 timing window. This response code shall manipulate the P2max timing
-parameter value in the server and the client. The P2max timing parameter is set to the value (in
-ms) of the P3max timing parameter. The client shall remain in the receive mode. The server(s)
-shall send multiple negative response messages with the negative response code $78 if required.
-As soon as the server has completed the task (routine) initiated by the request message it shall
-send either a positive or negative response message (negative response message with a
-response code other than $78) based on the last request message received. When the client has
-received the response message which has been preceded by the negative response message(s)
-with response code $78, the client and the server shall reset the P2max timing parameter to the
-previous timing value
-*/
+
 
 
 const uint8_t format_physical = 0x80;

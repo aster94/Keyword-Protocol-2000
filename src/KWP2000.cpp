@@ -45,9 +45,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 // P2 (min & max), P3 (min & max) and P4 (min) are defined by the ECU with accessTimingParameter()
 
 // Initialization
-#define ISO_T_IDLE_NEW 2000 // min 300, max undefinied
-#define ISO_T_INIL 25       // Initialization low time
-#define ISO_T_WUP 50        // Wake up Pattern
+#define ISO_T_IDLE_NEW 2000         // min 300, max undefinied
+#define ISO_T_INIL (unsigned int)25 // Initialization low time
+#define ISO_T_WUP (unsigned int)50  // Wake up Pattern
 
 enum error_enum // a nice collection of ECU Errors
 {
@@ -82,7 +82,8 @@ KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const ui
 
 ////////////// SETUP ////////////////
 
-void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint32_t debug_baudrate, const uint8_t debug_level)
+#if defined(ARDUINO_ARCH_STM32)
+void KWP2000::enableDebug(USBSerial *debug_serial, const uint8_t debug_level, const uint32_t debug_baudrate)
 {
     _debug = debug_serial;
     _debug->begin(debug_baudrate);
@@ -94,14 +95,36 @@ void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint32_t debug_bau
         _debug->println(F("Debug enabled"));
     }
 }
+#else
+void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint8_t debug_level, const uint32_t debug_baudrate)
+{
+    _debug = debug_serial;
+    _debug->begin(debug_baudrate);
+    _debug_level = debug_level;
+    _debug_enabled = true;
+
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->println(F("Debug enabled"));
+    }
+}
+#endif
 
 void KWP2000::setDebugLevel(const uint8_t debug_level)
 {
     _debug_level = debug_level;
+    if (_debug_level == DEBUG_LEVEL_NONE)
+    {
+        _debug_enabled = false;
+    }
+    else
+    {
+        _debug_enabled = true;
+    }
     if (_debug_level >= DEBUG_LEVEL_DEFAULT)
     {
         _debug->print(F("Debug level: "));
-        _debug->println(debug_level);
+        _debug->println(debug_level == DEBUG_LEVEL_DEFAULT ? "default" : "verbose");
     }
 }
 
@@ -119,6 +142,7 @@ void KWP2000::enableDealerMode(const uint8_t dealer_pin)
 {
     _dealer_pin = dealer_pin;
     pinMode(_dealer_pin, OUTPUT);
+    digitalWrite(_dealer_pin, LOW);
 }
 
 void KWP2000::dealerMode(const uint8_t dealer_mode)
@@ -128,7 +152,7 @@ void KWP2000::dealerMode(const uint8_t dealer_mode)
     if (_debug_level >= DEBUG_LEVEL_DEFAULT)
     {
         _debug->print(F("Dealer mode: "));
-        _debug->println(_dealer_mode == 1 ? "Enabled" : "Disabled");
+        _debug->println(_dealer_mode == true ? "Enabled" : "Disabled");
     }
 }
 
@@ -344,7 +368,7 @@ int8_t KWP2000::initKline(uint8_t **p_p)
 
         if (handleRequest(atp_read_current, LEN(atp_read_current)) == true)
         {
-            accessTimingParameter();
+            accessTimingParameter(false);
             return 1; // end of the init sequence
         }
         else
@@ -476,43 +500,6 @@ int8_t KWP2000::stopKline(uint8_t **p_p, uint8_t *p_p_len)
         _elapsed_time = 0;
         _stop_sequence_started = false;
         return 1;
-    }
-}
-
-int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len)
-{
-    uint8_t attempt = 1;
-    uint8_t completed = false;
-    while (attempt <= 3 && completed == false)
-    {
-        sendRequest(to_send, send_len);
-        listenResponse();
-        if (checkResponse(to_send) == true)
-        {
-            completed = true;
-        }
-        else
-        {
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                _debug->print(F("Attempt "));
-                _debug->print(attempt);
-                _debug->print(F(" not luckly"));
-                _debug->println(attempt < 3 ? ", trying again"
-                                            : "\nWe wasn't able to comunicate");
-            }
-            attempt++;
-        }
-    }
-
-    if (completed == true)
-    {
-        return true;
-    }
-    else
-    {
-        // we made more than 3 attemps so there is a problem
-        return -1;
     }
 }
 
@@ -674,6 +661,44 @@ void KWP2000::keepAlive(uint16_t time)
 }
 
 ////////////// COMMUNICATION - Advanced ////////////////
+
+int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len)
+{
+    uint8_t attempt = 1;
+    uint8_t completed = false;
+    while (attempt <= 3 && completed == false)
+    {
+        sendRequest(to_send, send_len);
+        listenResponse();
+        if (checkResponse(to_send) == true)
+        {
+            completed = true;
+        }
+        else
+        {
+            if (_debug_level == DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->print(F("Attempt "));
+                _debug->print(attempt);
+                _debug->print(F(" not luckly"));
+                _debug->println(attempt < 3 ? ", trying again"
+                                            : "\nWe wasn't able to comunicate");
+            }
+            attempt++;
+        }
+    }
+
+    if (completed == true)
+    {
+        return true;
+    }
+    else
+    {
+        // we made more than 3 attemps so there is a problem
+        return -1;
+    }
+}
+
 void KWP2000::accessTimingParameter(const uint8_t read_only)
 {
     uint8_t p2_min_temp = _response[_response_data_start + 2];
@@ -747,13 +772,41 @@ void KWP2000::accessTimingParameter(const uint8_t read_only)
     }
 }
 
+void KWP2000::resetTimingParameter()
+{
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->println(F("Resetting time parameters to default"));
+    }
+    if (handleRequest(atp_set_default, LEN(atp_set_default)) == true)
+    {
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+        {
+            _debug->println(F("Changed"));
+        }
+    }
+    else
+    {
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+        {
+            _debug->println(F("Not changed"));
+        }
+    }
+    accessTimingParameter(true);
+}
+
 void KWP2000::changeTimingParameter(uint32_t new_atp[], const uint8_t new_atp_len)
 {
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->println(F("Changing timing parameter"));
+    }
+
     if ((new_atp == nullptr) || (new_atp_len == 0))
     {
         if (_debug_level == DEBUG_LEVEL_VERBOSE)
         {
-            _debug->println(F("Changing timing parameter not possible: wrong array or wrong lenght"));
+            _debug->println(F("Wrong array or wrong lenght"));
         }
         setError(EE_USER);
         return;
@@ -854,8 +907,20 @@ void KWP2000::changeTimingParameter(uint32_t new_atp[], const uint8_t new_atp_le
     }
 
     // send it
-    sendRequest(pid_temp, LEN(pid_temp));
-    listenResponse();
+    if (handleRequest(pid_temp, LEN(pid_temp)) == true)
+    {
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+        {
+            _debug->println(F("Changed"));
+        }
+    }
+    else
+    {
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+        {
+            _debug->println(F("Not changed"));
+        }
+    }
 
     // check if our values has been setted correctly
     accessTimingParameter(true);
@@ -1543,40 +1608,86 @@ int8_t KWP2000::checkResponse(const uint8_t response_sent[])
     }
     else if (_response[_response_data_start] == request_rejected)
     {
-        setError(EE_CR);
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->print(F("\nRequest rejected with code: "));
+        }
+
         if (_response[_response_data_start + 1] != response_sent[0])
         {
+            // this is not the request we sent!
             setError(EE_WR);
         }
 
-        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-        {
-            _debug->print(F("\nRequest rejected by the ECU with code: "));
-        }
+        // the ECU rejected our request and gave us some useful info
+        setError(EE_CR);
 
-        if (_response[_response_data_start + 2] == 0x10)
+        switch (_response[_response_data_start + 2])
         {
+        case 0x10:
             if (_debug_level == DEBUG_LEVEL_VERBOSE)
             {
                 _debug->println(F("General\n"));
             }
             return -2;
-        }
-        else if (_response[_response_data_start + 2] == 0x11) //todo
-        {
+
+        case 0x11:
             if (_debug_level == DEBUG_LEVEL_VERBOSE)
             {
-                _debug->println(F("todo\n"));
+                _debug->println(F("Service Not Supported\n"));
             }
             return -3;
-        } //and so on
-        else
-        {
+
+        case 0x12:
+            if (_debug_level == DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->println(F("Sub Function Not Supported or Invalid Format\n"));
+            }
+            return -4;
+
+        case 0x21:
+            if (_debug_level == DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->println(F("Busy\n"));
+            }
+            // would you call me later?
+            return -5;
+
+        case 0x22:
+            if (_debug_level == DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->println(F("Conditions Not Correct or Request Sequence Error\n"));
+            }
+            return -6;
+
+        case 0x78:
+            if (_debug_level == DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->println(F("Request Correctly Received - Response Pending\n"));
+            }
+            /*
+            This response code shall only be used by a server in case it
+            cannot send a positive or negative response message based on the client's request message
+            within the active P2 timing window. This response code shall manipulate the P2max timing
+            parameter value in the server and the client. The P2max timing parameter is set to the value (in
+            ms) of the P3max timing parameter. The client shall remain in the receive mode. The server(s)
+            shall send multiple negative response messages with the negative response code $78 if required.
+            As soon as the server has completed the task (routine) initiated by the request message it shall
+            send either a positive or negative response message (negative response message with a
+            response code other than $78) based on the last request message received. When the client has
+            received the response message which has been preceded by the negative response message(s)
+            with response code $78, the client and the server shall reset the P2max timing parameter to the
+            previous timing value
+            */
+            setError(EE_US);
+            return -7;
+
+        default:
             if (_debug_level == DEBUG_LEVEL_VERBOSE)
             {
                 _debug->println(F("Unknown error code\n"));
             }
-            return -6;
+            return -8;
         }
     }
     else
@@ -1591,16 +1702,21 @@ int8_t KWP2000::checkResponse(const uint8_t response_sent[])
         }
         setError(EE_CR);
         setError(EE_UNEX);
-        return -8;
+        return -9;
     }
     // the program should never arrive here
     setError(EE_UNEX);
-    return -9;
+    return -10;
 }
 
 void KWP2000::setError(const uint8_t error)
 {
     bitSet(_ECU_error, error);
+}
+
+void KWP2000::clearError(const uint8_t error)
+{
+    bitClear(_ECU_error, error);
 }
 
 void KWP2000::configureKline()

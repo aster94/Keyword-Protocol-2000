@@ -8,11 +8,15 @@
 - road test passed :D
 - version promoted for pubblication on the arduino library manager
 
-#### 0.5.1 - oct 27, 2018
-- added handle request
+#### 0.5.1 - oct 28, 2018
+- added handleRequest
 - added changeTimingParameter
 - better keepAlive
 - solved bug in ECU emulator
+- found [bug](https://github.com/espressif/arduino-esp32/issues/2004) in ESP32 core - waiting for someone who can fix it meanwhile i moved to STM32
+- added clearError
+- better checkResponse
+- added resetTimingParameter
 
 #### 0.5.0 - Oct 26, 2018
 - completely rewritten the sendRequest, listenResponse and checkResponse
