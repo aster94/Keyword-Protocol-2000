@@ -13,23 +13,28 @@ KWP2000                 KEYWORD1
 #######################################
 
 enableDebug             KEYWORD2
-disableDebug            KEYWORD2
 setDebugLevel           KEYWORD2
+disableDebug            KEYWORD2
 enableDealerMode        KEYWORD2        
 dealerMode              KEYWORD2
-sendRequest             KEYWORD2
-listenResponse          KEYWORD2
-requestSensorsData      KEYWORD2
+
 initKline               KEYWORD2
 stopKline               KEYWORD2
+requestSensorsData      KEYWORD2
 keepAlive               KEYWORD2
+
+handleRequest           KEYWORD2
+accessTimingParameter   KEYWORD2
+resetTimingParameter    KEYWORD2
+changeTimingParameter   KEYWORD2
+
 printStatus             KEYWORD2
 printSensorsData        KEYWORD2
 printLastResponse       KEYWORD2
 getStatus               KEYWORD2
 getError                KEYWORD2
 resetError              KEYWORD2
-getGear                 KEYWORD2
+getGPS                  KEYWORD2
 getRPM                  KEYWORD2
 getSpeed                KEYWORD2
 getTPS                  KEYWORD2
@@ -38,7 +43,6 @@ getIAT                  KEYWORD2
 getECT                  KEYWORD2
 getSTPS                 KEYWORD2
 
-
 #######################################
 # Constants (LITERAL1)
 #######################################
@@ -46,3 +50,4 @@ getSTPS                 KEYWORD2
 DEBUG_LEVEL_NONE        LITERAL1
 DEBUG_LEVEL_DEFAULT     LITERAL1
 DEBUG_LEVEL_VERBOSE     LITERAL1
+maybe                   LITERAL1
