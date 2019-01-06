@@ -4,16 +4,17 @@
 - test on other bikes
 - discover new PIDs
 
-#### 1.0.0 - soon
-- road test passed :D
+#### 1.0.0 - ?
 - version promoted for pubblication on the arduino library manager
+- code cleaner
+- better docs
 
 #### 0.5.1 - oct 28, 2018
 - added handleRequest
 - added changeTimingParameter
 - better keepAlive
 - solved bug in ECU emulator
-- found [bug](https://github.com/espressif/arduino-esp32/issues/2004) in ESP32 core - waiting for someone who can fix it meanwhile i moved to STM32
+- found [bug](https://github.com/espressif/arduino-esp32/issues/2004) in ESP32 core - waiting for someone who can fix it meanwhile I moved to STM32
 - added clearError
 - better checkResponse
 - added resetTimingParameter
