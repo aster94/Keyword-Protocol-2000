@@ -1,3 +1,5 @@
+.pioenvs/**
 .vscode/**
-/examples/test/**
 /extras/Resources/**
+/test/**
+platformio.ini
