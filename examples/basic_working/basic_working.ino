@@ -1,10 +1,12 @@
 #include "KWP2000.h"
-#if defined (ARDUINO_ARCH_AVR)
+
+#if defined (ARDUINO_ARCH_ESP32)
+HardwareSerial bike(2); // The ESP32 core needs this
+#else
 #define bike Serial2
-#elif defined (ARDUINO_ARCH_ESP32)
-HardwareSerial bike(2);
 #endif
-KWP2000 ECU(&subikezuki, 17);
+
+KWP2000 ECU(&bike, 17);
 
 uint8_t dealer_status = false;
 char in;
