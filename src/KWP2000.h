@@ -17,29 +17,21 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/*  TODO
+/*  TODO LIST
 check types
 pids from wikipedia / manzo / ecuhacking / forum ?
 make an array to save errors?
 remove resetError?
-remember to update keywords.txt and readme
-choose delay time for begin/end/echo
+remember to update keywords.txt, readme, library.properties
 in keepalive should i try to send a request anyway instead of closing?
 find shorter request for keepalive
-use listenResponse or while available/read in keepalive?
 smart delay for the delay at the end of send and listen
-why new and new.h? check names in other platform, add compiler variables if needed
-try to compile on mega and stm
 remove echo?
-check init times with logic analizer
+check with logic analyzer
 check pids.h
-more const from the iso
-remove these lines before commit
 check if te ecu is connected before some functions
 check all serial if have F
-discover how the hell works git and make a branch without pointers
-check verbose/default
-change library.properties
+check verbose/default levels
 */
 
 #ifndef KWP2000_h
@@ -79,7 +71,7 @@ class KWP2000
 
     // PRINT and GET
     void printStatus(uint16_t time = 2000);
-    void printSensorsData(uint16_t time = 1);
+    void printSensorsData();
     void printLastResponse();
     int8_t getStatus();
     int8_t getError();

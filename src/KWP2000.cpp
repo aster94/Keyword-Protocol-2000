@@ -28,7 +28,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 
 //#define FAHRENHEIT
 #define TO_FAHRENHEIT(x) x * 1.8 + 32
-
 #define LEN(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
 
 // These values are defined by the ISO protocol
@@ -49,7 +48,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #define ISO_T_INIL (unsigned int)25 // Initialization low time
 #define ISO_T_WUP (unsigned int)50  // Wake up Pattern
 
-enum error_enum // a nice collection of ECU Errors
+/**
+ * @brief This is a a collection of  possible ECU Errors
+ */
+enum error_enum
 {
     EE_TEST,   // for various test
     EE_START,  // unable to start comunication
@@ -72,6 +74,13 @@ enum error_enum // a nice collection of ECU Errors
 
 ////////////// CONSTRUCTOR ////////////////
 
+/**
+ * @brief Constructor for the KWP2000 class
+ * 
+ * @param kline_serial The Serial port you will use to communicate with the ECU
+ * @param k_out_pin The TX pin of this serial
+ * @param kline_baudrate The baudrate for the kline (defaut to 10400)
+ */
 KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint32_t kline_baudrate)
 {
     _kline = kline_serial;
@@ -81,6 +90,13 @@ KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const ui
 
 ////////////// SETUP ////////////////
 
+/**
+ * @brief Enable the debug of the communication
+ * 
+ * @param debug_serial The Serial port you will use for the debug information
+ * @param debug_level Default: `DEBUG_LEVEL_DEFAULT` The verbosity of the debug
+ * @param debug_baudrate Default: `115200` The baudrate for the debug
+ */
 void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint8_t debug_level, const uint32_t debug_baudrate)
 {
     _debug = debug_serial;
@@ -94,6 +110,11 @@ void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint8_t debug_leve
     }
 }
 
+/**
+ * @brief Change the debug level
+ * 
+ * @param debug_level choose between DEBUG_LEVEL_NONE DEBUG_LEVEL_DEFAULT DEBUG_LEVEL_VERBOSE
+ */
 void KWP2000::setDebugLevel(const uint8_t debug_level)
 {
     _debug_level = debug_level;
@@ -113,7 +134,7 @@ void KWP2000::setDebugLevel(const uint8_t debug_level)
 }
 
 /**
- * @brief test
+ * @brief Disable the debug
  * 
  */
 void KWP2000::disableDebug()
@@ -127,9 +148,9 @@ void KWP2000::disableDebug()
 }
 
 /**
- * @brief prova2
+ * @brief Only for Suzuki: Enable the Dealer Mode
  * 
- * @param dealer_pin the pin where boh 
+ * @param dealer_pin The pin you will use to control it
  */
 void KWP2000::enableDealerMode(const uint8_t dealer_pin)
 {
@@ -138,6 +159,11 @@ void KWP2000::enableDealerMode(const uint8_t dealer_pin)
     digitalWrite(_dealer_pin, LOW);
 }
 
+/**
+ * @brief Enable/Disable the Dealer Mode
+ * 
+ * @param dealer_mode Choose between true/false
+ */
 void KWP2000::dealerMode(const uint8_t dealer_mode)
 {
     _dealer_mode = dealer_mode;
@@ -151,6 +177,11 @@ void KWP2000::dealerMode(const uint8_t dealer_mode)
 
 ////////////// COMMUNICATION - Basic ////////////////
 
+/**
+ * @brief Inizialize the the communication through the K-Line
+ * 
+ * @return int8_t return `0` until the connection is not established, then `true` if there aren't any errors, a `negative number` otherwise
+ */
 int8_t KWP2000::initKline()
 {
     if (_ECU_status == true)
@@ -319,6 +350,11 @@ int8_t KWP2000::initKline()
     return -9;
 }
 
+/**
+ * @brief Close the communication with the motorbike
+ * 
+ * @return int8_t return `0` until the connection is not closed, then `true` if there aren't any errors, a `negative number` otherwise
+ */
 int8_t KWP2000::stopKline()
 {
     if (_ECU_status == false)
@@ -391,6 +427,10 @@ int8_t KWP2000::stopKline()
     }
 }
 
+/**
+ * @brief Send a request to the ECU asking for data from all the sensors, to see them you can use `printSensorsData()`
+ * 
+ */
 void KWP2000::requestSensorsData()
 {
     if (_ECU_status == false)
@@ -481,6 +521,11 @@ void KWP2000::requestSensorsData()
     _last_sensors_calculated = millis();
 }
 
+/**
+ * @brief Keep the connection through the K-Line alive
+ * 
+ * @param time It is calculated automatically to be a safe interval
+ */
 void KWP2000::keepAlive(uint16_t time)
 {
     if (_kline->available() > 0)
@@ -550,6 +595,13 @@ void KWP2000::keepAlive(uint16_t time)
 
 ////////////// COMMUNICATION - Advanced ////////////////
 
+/**
+ * @brief This function is part of the core of the library. You just need to give a PID and it will generate the header, calculate the checksum and try to send the request with error hadling options
+ * 
+ * @param to_send The PID you want to send, see PID.h for more detail
+ * @param send_len The lenght of the PID (use `sizeof` to get it)
+ * @return int8_t return `true` if the request has been sent and a correct response has been received, a `negative number` otherwise
+ */
 int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len)
 {
     uint8_t attempt = 1;
@@ -587,6 +639,11 @@ int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len)
     }
 }
 
+/**
+ * @brief Ask and print the Timing Parameters from the ECU
+ * 
+ * @param read_only Default: `true` this avoid the possibility to unintentionally change them
+ */
 void KWP2000::accessTimingParameter(const uint8_t read_only)
 {
     uint8_t p2_min_temp = _response[_response_data_start + 2];
@@ -660,6 +717,10 @@ void KWP2000::accessTimingParameter(const uint8_t read_only)
     }
 }
 
+/**
+ * @brief Reset the Timing Parameters to the default settings from the ECU
+ * 
+ */
 void KWP2000::resetTimingParameter()
 {
     if (_debug_level >= DEBUG_LEVEL_DEFAULT)
@@ -683,6 +744,12 @@ void KWP2000::resetTimingParameter()
     accessTimingParameter(true);
 }
 
+/**
+ * @brief Change the Timing Parameters to custom ones
+ * 
+ * @param new_atp Array of 5 elements containing the new parameters
+ * @param new_atp_len The lenght of the array (use `sizeof` to get it)
+ */
 void KWP2000::changeTimingParameter(uint32_t new_atp[], const uint8_t new_atp_len)
 {
     if (_debug_level >= DEBUG_LEVEL_DEFAULT)
@@ -806,6 +873,11 @@ void KWP2000::changeTimingParameter(uint32_t new_atp[], const uint8_t new_atp_le
 
 /////////////////// PRINT and GET ///////////////////////
 
+/**
+ * @brief Print a rich and useful set of information about the ECU status and errors
+ * 
+ * @param time Default: `2000ms` the time between one print and the other
+ */
 void KWP2000::printStatus(uint16_t time)
 {
     if (time == false)
@@ -914,20 +986,12 @@ void KWP2000::printStatus(uint16_t time)
     }
 }
 
-void KWP2000::printSensorsData(uint16_t time)
+/**
+ * @brief Print all the sensors data from the ECU, you need to run `requestSensorsData()` before
+ * 
+ */
+void KWP2000::printSensorsData()
 {
-    if (time == false)
-    {
-        // skip
-        return;
-    }
-
-    if (millis() - _last_data_print <= time)
-    {
-        // not enough time has passed since last time we printed the sensor data
-        return;
-    }
-
     if (_last_sensors_calculated == 0)
     {
         // we didn't run requestSensorsData
@@ -979,6 +1043,10 @@ void KWP2000::printSensorsData(uint16_t time)
     }
 }
 
+/**
+ * @brief Print the last response received from the ECU
+ * 
+ */
 void KWP2000::printLastResponse()
 {
     if (_debug_enabled == true)
@@ -995,11 +1063,21 @@ void KWP2000::printLastResponse()
     }
 }
 
+/**
+ * @brief Get the connection status
+ * 
+ * @return int8_t It could be `true` or `false`
+ */
 int8_t KWP2000::getStatus()
 {
     return _ECU_status;
 }
 
+/**
+ * @brief This say you only if there are/aren't errors, to see them use `printStatus()`
+ * 
+ * @return int8_t It could be `true` or `false`
+ */
 int8_t KWP2000::getError()
 {
     if (_ECU_error == 0)
@@ -1012,11 +1090,20 @@ int8_t KWP2000::getError()
     }
 }
 
+/**
+ * @brief Reset the errors from the ECU, use with caution
+ * 
+ */
 void KWP2000::resetError()
 {
     _ECU_error = 0;
 }
 
+/**
+ * @brief Get*
+ * 
+ * @return uint8_t Get the sensor value from the ECU
+ */
 uint8_t KWP2000::getGPS()
 {
     return _GPS;

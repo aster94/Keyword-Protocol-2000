@@ -4,10 +4,13 @@
 - test on other bikes
 - discover new PIDs
 
-#### 1.0.0 - ?
+#### 1.0.0 - jan 10, 2019
 - version promoted for pubblication on the arduino library manager
 - code cleaner
-- better docs
+- created documentation with doxygen
+- removed the pointers complex code to a different branch
+- removed the unofficial STM32 USBSerial
+- code cleared
 
 #### 0.5.1 - oct 28, 2018
 - added handleRequest
