@@ -142,7 +142,6 @@ void KWP2000::disableDebug()
     _debug_enabled = false;
 }
 
-
 /**
  * @brief prova2
  * 

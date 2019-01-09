@@ -131,11 +131,7 @@ class KWP2000
     uint16_t _keep_iso_alive = 1000;
 
     // debug
-#if defined(ARDUINO_ARCH_STM32)
-    USBSerial *_debug;
-#else
     HardwareSerial *_debug;
-#endif
     uint8_t _debug_enabled = false;
     uint32_t _debug_baudrate;
     uint8_t _debug_level = DEBUG_LEVEL_DEFAULT;
