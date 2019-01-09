@@ -60,9 +60,6 @@ class KWP2000
 
     // SETUP
     void enableDebug(HardwareSerial *debug_serial, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT, const uint32_t debug_baudrate = 115200);
-#if defined(ARDUINO_ARCH_STM32)
-    void enableDebug(USBSerial *debug_serial, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT, const uint32_t debug_baudrate = 115200);
-#endif
     void setDebugLevel(const uint8_t debug_level);
     void disableDebug();
     void enableDealerMode(const uint8_t dealer_pin);
@@ -130,11 +127,7 @@ class KWP2000
     uint16_t _keep_iso_alive = 1000;
 
     // debug
-#if defined(ARDUINO_ARCH_STM32)
-    USBSerial *_debug;
-#else
     HardwareSerial *_debug;
-#endif
     uint8_t _debug_enabled = false;
     uint32_t _debug_baudrate;
     uint8_t _debug_level = DEBUG_LEVEL_DEFAULT;

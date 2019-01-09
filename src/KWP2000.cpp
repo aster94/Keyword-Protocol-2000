@@ -82,20 +82,6 @@ KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const ui
 
 ////////////// SETUP ////////////////
 
-#if defined(ARDUINO_ARCH_STM32)
-void KWP2000::enableDebug(USBSerial *debug_serial, const uint8_t debug_level, const uint32_t debug_baudrate)
-{
-    _debug = debug_serial;
-    _debug->begin(debug_baudrate);
-    _debug_level = debug_level;
-    _debug_enabled = true;
-
-    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-    {
-        _debug->println(F("Debug enabled"));
-    }
-}
-#else
 void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint8_t debug_level, const uint32_t debug_baudrate)
 {
     _debug = debug_serial;
@@ -108,7 +94,6 @@ void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint8_t debug_leve
         _debug->println(F("Debug enabled"));
     }
 }
-#endif
 
 void KWP2000::setDebugLevel(const uint8_t debug_level)
 {
@@ -141,7 +126,6 @@ void KWP2000::disableDebug()
     _debug->end();
     _debug_enabled = false;
 }
-
 
 /**
  * @brief prova2
