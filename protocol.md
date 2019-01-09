@@ -14,25 +14,37 @@ Unfortunately before the born of [International Organization for Standardization
 
 # Comunication
 This is what we need to start the connection
+
 ![Alt text](/extras/Images/fast_init.png?raw=true "start")
 
+
 Before we begin this is the structure of the packets we would send/receive from the ECU
+
 ![Alt text](/extras/Images/structure.png?raw=true "structure")
 
+
 Also the timing between bytes, requests, responses is crucial
+
 ![Alt text](/extras/Images/timing.png?raw=true "timing")
+
 
 ## 1 - Inizialize
 Finally we can start the connection
+
 ![Alt text](/extras/Images/fast_init.png?raw=true "fast init")
+
 
 ## 2 - Receive the keybytes...
 We will receive a confirmation from the ECU and two more bytes which would say to us how the motorbike expect to receive the request from us
+
 ![Alt text](/extras/Images/keybytes.png?raw=true "key bytes")
+
 
 ## 3 - Timing parameters
 Then, for stronger safety, we will ask to the ECU its limits about timing
+
 ![Alt text](/extras/Images/timing_parameter.png?raw=true "timing parameter")
 
-## 4 - whatever
+
+## 4 - Enojoy
 Now we can ask for sensors data, see error codes, upload/download from the ECU, and so on

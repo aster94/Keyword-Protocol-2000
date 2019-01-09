@@ -128,6 +128,10 @@ void KWP2000::setDebugLevel(const uint8_t debug_level)
     }
 }
 
+/**
+ * @brief test
+ * 
+ */
 void KWP2000::disableDebug()
 {
     if (_debug_level >= DEBUG_LEVEL_DEFAULT)
@@ -138,6 +142,12 @@ void KWP2000::disableDebug()
     _debug_enabled = false;
 }
 
+
+/**
+ * @brief prova2
+ * 
+ * @param dealer_pin the pin where boh 
+ */
 void KWP2000::enableDealerMode(const uint8_t dealer_pin)
 {
     _dealer_pin = dealer_pin;
@@ -1434,7 +1444,7 @@ void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use
                     {
                         if (_debug_level == DEBUG_LEVEL_VERBOSE)
                         {
-                            // (I'm not jealous it's just curiosity)
+                            // (I'm not jealous it's just curiosity :P)
                             _debug->print(F("\t- ECU is communicating with this address"));
                         }
                         setError(EE_TO);
