@@ -13,11 +13,6 @@ Unfortunately before the born of [International Organization for Standardization
 
 
 # Comunication
-This is what we need to start the connection
-
-![Alt text](/extras/Images/fast_init.png?raw=true "start")
-
-
 Before we begin this is the structure of the packets we would send/receive from the ECU
 
 ![Alt text](/extras/Images/structure.png?raw=true "structure")
