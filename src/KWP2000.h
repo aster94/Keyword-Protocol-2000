@@ -58,10 +58,11 @@ class KWP2000
     // CONSTRUCTOR
     KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint32_t kline_baudrate = 10400);
 
-    // SETUP
-    void enableDebug(HardwareSerial *debug_serial, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT, const uint32_t debug_baudrate = 115200);
+    // SETUP 
 #if defined(ARDUINO_ARCH_STM32)
     void enableDebug(USBSerial *debug_serial, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT, const uint32_t debug_baudrate = 115200);
+#else
+    void enableDebug(HardwareSerial *debug_serial, const uint8_t debug_level = DEBUG_LEVEL_DEFAULT, const uint32_t debug_baudrate = 115200);
 #endif
     void setDebugLevel(const uint8_t debug_level);
     void disableDebug();

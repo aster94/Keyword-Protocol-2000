@@ -1,9 +1,11 @@
 #include "KWP2000.h"
 
 #if defined (ARDUINO_ARCH_ESP32)
-HardwareSerial bike(2); // The ESP32 core needs this
+HardwareSerial bike(2); // for the ESP32 core
+#elif defined(ARDUINO_ARCH_STM32)
+HardwareSerial bike(PA3,PA2); // for the stm32duino core
 #else
-#define bike Serial2
+#define bike Serial2 // for the Arduino avr core
 #endif
 
 KWP2000 ECU(&bike, 17);
