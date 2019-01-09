@@ -3,12 +3,17 @@
 Created on Fri Aug  4 12:39:40 2017
 
 @author: Vincenzo G.
+
+module needed:
+    pyserial
 """
+
+
 
 import serial, time, sys
 from random import randint
 
-default_port = '/dev/ttyUSB1' # 'COMx' for windows '/dev/ttyUSBx' for linux
+default_port = 'COM6' # 'COMx' for windows '/dev/ttyUSBx' for linux
 this_address = 0xf1
 ecu_address = 0x12
 P2m = 40
