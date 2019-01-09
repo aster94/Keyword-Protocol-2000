@@ -1,5 +1,6 @@
 .pioenvs/**
 .vscode/**
+/doxygen
 /extras/Resources/**
 /test/**
 platformio.ini

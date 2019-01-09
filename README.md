@@ -43,10 +43,12 @@ Simply add this from the Arduino/PlatformIO Library Manager or download this rep
 I made a [ECU Emulator](/extras/ECU_Emulator) written in python for the development of new functions and tests.
 
 
-# Documentation
+### Documentation
 Generally the functions return `true` if everything went fine, a `negative number` if there where any error, `false` if nothing changed
 
-todo: make it with doxygen
+This documentation has been automatically generated with doxygen + moxygen, an automatic documentation generator, i will fix it the formatting later. 
+
+See it here [documentation](documentation.md)
 
 
 # Disclaimer
