@@ -36,7 +36,7 @@ getError                KEYWORD2
 resetError              KEYWORD2
 getGPS                  KEYWORD2
 getRPM                  KEYWORD2
-getSpeed                KEYWORD2
+getSPEED                KEYWORD2
 getTPS                  KEYWORD2
 getIAP                  KEYWORD2
 getIAT                  KEYWORD2

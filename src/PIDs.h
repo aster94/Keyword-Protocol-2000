@@ -2,6 +2,8 @@
 PIDs.h
 Parameter IDs
 
+Copyright (c) 2019 Aster94
+
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
 and associated documentation files (the "Software"), to deal in the Software without restriction, 
 including without limitation the rights to use, copy, modify, merge, publish, distribute, 
@@ -18,13 +20,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-
-
 const uint8_t format_physical = 0x80;
 const uint8_t format_functional = 0xC0; // not supported
 const uint8_t format_CARB = 0x40;       // not supported
-const uint8_t ECU_addr = 0x12;  // between hex 10 and 17
-const uint8_t OUR_addr = 0xF1; // between hex F0 and FD
+const uint8_t ECU_addr = 0x12;          // between hex 10 and 17
+const uint8_t OUR_addr = 0xF1;          // between hex F0 and FD
 
 const uint8_t start_com[] = {0x81};
 const uint8_t stop_com[] = {0x82};
@@ -38,16 +38,14 @@ const uint8_t atp_set_given[] = {0x83, 0x03};
 #define request_ok(x) x | 0x40
 const uint8_t request_rejected = 0x7F;
 
-#define GSXR //mdf
-
 // First choose only one of these motorbikes:
 // to choose delete the "//"
-//#define GSXR      // GSX-R600 and 1000
-//#define NINJA   // 636 and 1000
-//#define CBR     // CBR600 and 1000
-//#define R       // R6 and R1
+//#define SUZUKI        // GSX-R600 and 1000
+//#define KAWASAKI      // 636 and 1000
+//#define YAMAYA        // R6 and R1
+//#define HONDA         // CBR600 and 1000
 
-#if defined(GSXR)
+#if defined(SUZUKI)
 #if defined(BIKE_CHOOSED)
 #error "one or more bike choosed, please see KWP2000/src/PIDs.h"
 #else
@@ -75,9 +73,9 @@ const uint8_t request_sens[] = {0x21, 0x08};
 #define PID_GEAR_3 53
 
 //from mark's (ciclegadget) PID_STP 46
-#endif // GSXR
+#endif // SUZUKI
 
-#if defined(NINJA)
+#if defined(KAWASAKI)
 #if defined(BIKE_CHOOSED)
 #error "one or more bike choosed, please see KWP2000/src/PIDs.h"
 #else
@@ -91,9 +89,9 @@ const uint8_t request_sens[][] = {
     //todo
 };
 
-#endif // NINJA
+#endif // KAWASAKI
 
-#if defined(R)
+#if defined(YAMAYA)
 #if defined(BIKE_CHOOSED)
 #error "one or more bike choosed, please see KWP2000/src/PIDs.h"
 #else
@@ -106,16 +104,16 @@ You initialize the diagnostic mode by sending 0x80 and from then on you can just
 Rpm, Speed, Error, Gear & Checksum.
 todo: need more info
 */
-#endif // R
+#endif // YAMAYA
 
-#if defined(CBR)
+#if defined(HONDA)
 #if defined(BIKE_CHOOSED)
 #error "one or more bike choosed, please see KWP2000/src/PIDs.h"
 #else
 #define BIKE_CHOOSED
 #endif // BIKE_CHOOSED
 // see above
-#endif // CBR
+#endif // HONDA
 
 #ifndef BIKE_CHOOSED
 #error "no bike selected, please see KWP2000/src/PIDs.h"

@@ -46,7 +46,7 @@ I made a [ECU Emulator](/extras/ECU_Emulator) written in python for the developm
 ### Documentation
 Generally the functions return `true` if everything went fine, a `negative number` if there where any error, `false` if nothing changed
 
-This documentation has been automatically generated with doxygen + moxygen, an automatic documentation generator, i will fix it the formatting later. 
+This documentation has been automatically generated with doxygen + moxygen, an automatic documentation generator, I will make the formatting nicer later.
 
 See it here [documentation](documentation.md)
 
