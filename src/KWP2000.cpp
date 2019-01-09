@@ -58,7 +58,6 @@ enum error_enum // a nice collection of ECU Errors
     EE_FROM,   // data don't came from the ECU
     EE_CS,     // checksum error
     EE_ECHO,   // echo error
-    EE_MEMORY, // memory leak
     EE_UNEX,   // unexpected error
     EE_HEADER, // strange header
     EE_USER,   // error due to wrong call of a function
@@ -152,7 +151,7 @@ void KWP2000::dealerMode(const uint8_t dealer_mode)
 
 ////////////// COMMUNICATION - Basic ////////////////
 
-int8_t KWP2000::initKline(uint8_t **p_p)
+int8_t KWP2000::initKline()
 {
     if (_ECU_status == true)
     {
@@ -170,66 +169,6 @@ int8_t KWP2000::initKline(uint8_t **p_p)
         if (_debug_level >= DEBUG_LEVEL_DEFAULT)
         {
             _debug->println(F("\nInitialize K-line"));
-        }
-
-        if (_response_is_allocated == false)
-        {
-#if defined(ARDUINO_ARCH_ESP32)
-            _response = new (std::nothrow) uint8_t[ISO_MAX_DATA];
-#else
-            _response = new uint8_t[ISO_MAX_DATA];
-#endif
-            _response_is_allocated = true;
-
-            if (p_p != nullptr)
-            {
-                // we passed a pointer which will point to _response
-                *p_p = _response;
-
-                if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                {
-                    _debug->print(F("Allocating given poiners: "));
-                }
-                if (p_p == nullptr)
-                {
-                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                    {
-                        _debug->println(F("wrong"));
-                    }
-                    setError(EE_MEMORY);
-                }
-                else
-                {
-                    if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                    {
-                        _debug->println(F("correct"));
-                    }
-                }
-            }
-        }
-        else
-        {
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                _debug->println(F("Memory already allocated"));
-            }
-        }
-
-        if (_response == nullptr)
-        {
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                _debug->println(F("Memory allocation: wrong"));
-            }
-            setError(EE_MEMORY);
-            return -1;
-        }
-        else
-        {
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                _debug->println(F("Memory allocation: correct"));
-            }
         }
 
         if (ISO_T_IDLE == 0)
@@ -380,7 +319,7 @@ int8_t KWP2000::initKline(uint8_t **p_p)
     return -9;
 }
 
-int8_t KWP2000::stopKline(uint8_t **p_p, uint8_t *p_p_len)
+int8_t KWP2000::stopKline()
 {
     if (_ECU_status == false)
     {
@@ -411,58 +350,13 @@ int8_t KWP2000::stopKline(uint8_t **p_p, uint8_t *p_p_len)
             setError(EE_STOP);
         }
 
-        // we passed only one of these two arguments
-        if ((p_p == nullptr) ^ (p_p_len == nullptr))
+        // reset all
+        for (uint16_t i = 0; i < ISO_MAX_DATA; i++)
         {
-            setError(EE_USER);
+            _response[i] = 0;
         }
-
-        // deference the pointer if we passed it
-        if (p_p != nullptr && p_p_len != nullptr)
-        {
-            *p_p = nullptr;
-            *p_p_len = 0;
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                _debug->print(F("Deallocating given poiners: "));
-            }
-            if (*p_p == nullptr)
-            {
-                if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                {
-                    _debug->println(F("correct"));
-                }
-            }
-            else
-            {
-                if (_debug_level == DEBUG_LEVEL_VERBOSE)
-                {
-                    _debug->println(F("wrong"));
-                }
-            }
-        }
-
-        delete[] _response;
-        _response_is_allocated = false;
-        _response = nullptr;
         _response_len = 0;
         _response_data_start = 0;
-
-        if (_response == nullptr)
-        {
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                _debug->println(F("_response deallocated"));
-            }
-        }
-        else
-        {
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                _debug->println(F("_response not deallocated"));
-            }
-            setError(EE_MEMORY);
-        }
 
         _last_correct_response = 0;
         _last_data_print = 0;
@@ -796,16 +690,6 @@ void KWP2000::changeTimingParameter(uint32_t new_atp[], const uint8_t new_atp_le
         _debug->println(F("Changing timing parameter"));
     }
 
-    if ((new_atp == nullptr) || (new_atp_len == 0))
-    {
-        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-        {
-            _debug->println(F("Wrong array or wrong lenght"));
-        }
-        setError(EE_USER);
-        return;
-    }
-
     if (new_atp_len != 5)
     {
         if (_debug_level == DEBUG_LEVEL_VERBOSE)
@@ -988,9 +872,6 @@ void KWP2000::printStatus(uint16_t time)
                         break;
                     case EE_ECHO:
                         _debug->println(F("Echo error"));
-                        break;
-                    case EE_MEMORY:
-                        _debug->println(F("Memory error"));
                         break;
                     case EE_UNEX:
                         _debug->println(F("Unexpected error"));
@@ -1273,31 +1154,14 @@ void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint
     }
 }
 
-void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use_delay)
+void KWP2000::listenResponse(const uint8_t use_delay)
 {
-    // we passed only one of these two arguments
-    if ((resp == nullptr) ^ (resp_len == nullptr))
-    {
-        setError(EE_USER);
-        return;
-    }
-
-    uint8_t save = false;
-    if (resp != nullptr && resp_len != nullptr)
-    {
-        save = true;
-    }
-
     // reset _response
     _response_data_start = 0;
     _response_len = 0;
     for (uint16_t i = 0; i < ISO_MAX_DATA; i++)
     {
         _response[i] = 0;
-        if (save)
-        {
-            resp[i] = 0;
-        }
     }
 
     uint8_t masked = 0;                     // useful for bit mask operation
@@ -1314,10 +1178,6 @@ void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use
         {
             incoming = _kline->read();
             _response[n_byte] = incoming;
-            if (save)
-            {
-                resp[n_byte] = incoming;
-            }
 
             if (_debug_level == DEBUG_LEVEL_VERBOSE)
             {
@@ -1488,10 +1348,6 @@ void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use
                     {
                         response_completed = true;
                         _response_len = n_byte;
-                        if (save)
-                        {
-                            *resp_len = n_byte;
-                        }
                         endResponse(incoming);
                     }
                     else // there is still data outside
@@ -1525,10 +1381,6 @@ void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use
                     {
                         response_completed = true;
                         _response_len = n_byte;
-                        if (save)
-                        {
-                            *resp_len = n_byte;
-                        }
                         endResponse(incoming);
                     }
                     else // data
@@ -1552,10 +1404,6 @@ void KWP2000::listenResponse(uint8_t *resp, uint8_t *resp_len, const uint8_t use
                 {
                     response_completed = true;
                     _response_len = n_byte;
-                    if (save)
-                    {
-                        *resp_len = n_byte;
-                    }
                     endResponse(incoming);
                 }
                 else // data

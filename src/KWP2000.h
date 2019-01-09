@@ -66,8 +66,8 @@ class KWP2000
     void dealerMode(const uint8_t dealer_mode);
 
     // COMMUNICATION - Basic
-    int8_t initKline(uint8_t **p_p = nullptr);
-    int8_t stopKline(uint8_t **p_p = nullptr, uint8_t *p_p_len = nullptr);
+    int8_t initKline();
+    int8_t stopKline();
     void requestSensorsData();
     void keepAlive(uint16_t time = 0);
 
@@ -75,7 +75,7 @@ class KWP2000
     int8_t handleRequest(const uint8_t to_send[], const uint8_t send_len);
     void accessTimingParameter(const uint8_t read_only = true);
     void resetTimingParameter();
-    void changeTimingParameter(uint32_t new_atp[] = nullptr, const uint8_t new_atp_len = 0);
+    void changeTimingParameter(uint32_t new_atp[], const uint8_t new_atp_len = 0);
 
     // PRINT and GET
     void printStatus(uint16_t time = 2000);
@@ -104,9 +104,8 @@ class KWP2000
     uint8_t _stop_sequence_started = false;
     uint32_t _start_time = 0;
     uint32_t _elapsed_time = 0;
-    uint8_t *_response = nullptr;
+    uint8_t _response[260]; //todo uso max data
     uint8_t _response_len = 0;
-    uint8_t _response_is_allocated = false;
     uint8_t _response_data_start = 0;
     uint8_t _request[20];
     uint8_t _request_len = 0;
@@ -143,7 +142,7 @@ class KWP2000
 
     // functions
     void sendRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t wait_to_send_all = true, const uint8_t use_delay = true);
-    void listenResponse(uint8_t *resp = nullptr, uint8_t *resp_len = nullptr, const uint8_t use_delay = true);
+    void listenResponse(const uint8_t use_delay = true);
     int8_t checkResponse(const uint8_t response_sent[]);
     void setError(const uint8_t error);
     void clearError(const uint8_t error);
