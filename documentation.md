@@ -2,98 +2,72 @@
 
  Members                        | Descriptions                                
 --------------------------------|---------------------------------------------
-`define `[`maybe`](#_k_w_p2000_8cpp_1ac09cafa5804458ef54fd27acfe9ff78a)            | 
-`define `[`TO_FAHRENHEIT`](#_k_w_p2000_8cpp_1a91e95ca0c2d1c25cd7bab761ef9331d0)            | 
-`define `[`LEN`](#_k_w_p2000_8cpp_1a3e4545636cef77da4ddab18e3d233101)            | 
-`define `[`ISO_MAX_DATA`](#_k_w_p2000_8cpp_1ab80bc64bf00fe64a0471b203280f3054)            | 
-`define `[`ISO_T_P1`](#_k_w_p2000_8cpp_1a67399a7a07871f926d079819a57990a6)            | 
+`define `[`maybe`](#_k_w_p2000_8cpp_1ac09cafa5804458ef54fd27acfe9ff78a)            | used when we don't know yet the behaviour of the K-Line
+`define `[`TO_FAHRENHEIT`](#_k_w_p2000_8cpp_1a91e95ca0c2d1c25cd7bab761ef9331d0)            | the formula for the conversion
+`define `[`LEN`](#_k_w_p2000_8cpp_1a3e4545636cef77da4ddab18e3d233101)            | complex but safe macro for the lenght
+`define `[`ISO_MAX_DATA`](#_k_w_p2000_8cpp_1ab80bc64bf00fe64a0471b203280f3054)            | maximum lenght of a response from the ecu: 255 data + 4 header + 1 checksum
+`define `[`ISO_T_P1`](#_k_w_p2000_8cpp_1a67399a7a07871f926d079819a57990a6)            | inter byte time for ECU response - min: 0 max: 20
 `define `[`ISO_T_P2_MIN_LIMIT`](#_k_w_p2000_8cpp_1ae4b897217d8a7cb71d4e5e8de2d88470)            | 
-`define `[`ISO_T_P2_MAX_LIMIT`](#_k_w_p2000_8cpp_1aae59d60e1e6bf444727c996601afdfe0)            | 
-`define `[`ISO_T_P3_MAX_LIMIT`](#_k_w_p2000_8cpp_1a8720dab33fbb5c524752090fab43bc3c)            | 
-`define `[`ISO_T_P4_MAX_LIMIT`](#_k_w_p2000_8cpp_1aaa520653e7d97461654cf65413a1e402)            | 
-`define `[`ISO_T_IDLE_NEW`](#_k_w_p2000_8cpp_1aaaf57595b6c6f1fa84605254930e8ad2)            | 
-`define `[`ISO_T_INIL`](#_k_w_p2000_8cpp_1af51a5a6e779aeca1e37e990663601a84)            | 
-`define `[`ISO_T_WUP`](#_k_w_p2000_8cpp_1a5ed4b5035e009d1d074a38128c025e1c)            | 
+`define `[`ISO_T_P2_MAX_LIMIT`](#_k_w_p2000_8cpp_1aae59d60e1e6bf444727c996601afdfe0)            | P2 time between tester request and ECU response or two ECU responses.
+`define `[`ISO_T_P3_MAX_LIMIT`](#_k_w_p2000_8cpp_1a8720dab33fbb5c524752090fab43bc3c)            | P3 time between end of ECU responses and start of new tester request.
+`define `[`ISO_T_P4_MAX_LIMIT`](#_k_w_p2000_8cpp_1aaa520653e7d97461654cf65413a1e402)            | inter byte time for tester request
+`define `[`ISO_T_IDLE_NEW`](#_k_w_p2000_8cpp_1aaaf57595b6c6f1fa84605254930e8ad2)            | min 300, max undefinied
+`define `[`ISO_T_INIL`](#_k_w_p2000_8cpp_1af51a5a6e779aeca1e37e990663601a84)            | Initialization low time.
+`define `[`ISO_T_WUP`](#_k_w_p2000_8cpp_1a5ed4b5035e009d1d074a38128c025e1c)            | Wake up Pattern.
 `define `[`request_ok`](#_p_i_ds_8h_1a78ce7705e54cbaa84ea562d4049227d2)            | 
-`define `[`GSXR`](#_p_i_ds_8h_1a5ffea234579c7d4a872aac17ff3e2118)            | 
-`define `[`PID_SPEED`](#_p_i_ds_8h_1a753f7ff15778c8b24c46f36e46dc86bb)            | 
-`define `[`PID_RPM_H`](#_p_i_ds_8h_1a41a41bd707e1e0b925b24cba3ef76eeb)            | 
-`define `[`PID_RPM_L`](#_p_i_ds_8h_1a144ed0f0bf3b4ca96f76975059e4f6b9)            | 
-`define `[`PID_TPS`](#_p_i_ds_8h_1a9da7c58e2c88f6071faf4defd385803b)            | 
-`define `[`PID_IAP`](#_p_i_ds_8h_1aa7b8920a2d9b490685845b297ed3ced6)            | 
-`define `[`PID_ECT`](#_p_i_ds_8h_1a55cb743016a89bc3a62025b491321f9a)            | 
-`define `[`PID_IAT`](#_p_i_ds_8h_1a712f0575160f7ae54053d1f8cbd18d05)            | 
-`define `[`PID_AP`](#_p_i_ds_8h_1add548a477a683d6419ba9fe9fde56144)            | 
-`define `[`PID_BATT`](#_p_i_ds_8h_1af3c7e1d2be42e2901208ed2a8edc3a0a)            | 
-`define `[`PID_HO2`](#_p_i_ds_8h_1a99fea456a8c45cb852534353e2ae1093)            | 
-`define `[`PID_GPS`](#_p_i_ds_8h_1aed472d4f03bf6a34f4d49b22de44881b)            | 
-`define `[`PID_STPS`](#_p_i_ds_8h_1a104df7967e33bb727cd3b13bb956a300)            | 
-`define `[`PID_PAIR`](#_p_i_ds_8h_1a33195c8180ee7a94b1c56c3de436b4f8)            | 
-`define `[`PID_CLUTCH`](#_p_i_ds_8h_1a8a7da3b5aecb24e53464219f93469656)            | 
-`define `[`PID_GEAR_3`](#_p_i_ds_8h_1aa6dd7e0ad53e4091c59f4a4b167bf04f)            | 
 `enum `[`error_enum`](#_k_w_p2000_8cpp_1ae7c16c55057fcaccff98f9725ba4d4ab)            | This is a a collection of possible ECU Errors.
-`enum `[`debug_enum`](#_k_w_p2000_8h_1ad078f8d8e69df174a8cac511c1c069ab)            | 
+`enum `[`debug_enum`](#_k_w_p2000_8h_1ad078f8d8e69df174a8cac511c1c069ab)            | Collection of possible debug levels.
 `class `[`KWP2000`](#class_k_w_p2000) | 
 
 ## Members
 
 #### `define `[`maybe`](#_k_w_p2000_8cpp_1ac09cafa5804458ef54fd27acfe9ff78a) 
 
+used when we don't know yet the behaviour of the K-Line
+
 #### `define `[`TO_FAHRENHEIT`](#_k_w_p2000_8cpp_1a91e95ca0c2d1c25cd7bab761ef9331d0) 
+
+the formula for the conversion
 
 #### `define `[`LEN`](#_k_w_p2000_8cpp_1a3e4545636cef77da4ddab18e3d233101) 
 
+complex but safe macro for the lenght
+
 #### `define `[`ISO_MAX_DATA`](#_k_w_p2000_8cpp_1ab80bc64bf00fe64a0471b203280f3054) 
 
+maximum lenght of a response from the ecu: 255 data + 4 header + 1 checksum
+
 #### `define `[`ISO_T_P1`](#_k_w_p2000_8cpp_1a67399a7a07871f926d079819a57990a6) 
+
+inter byte time for ECU response - min: 0 max: 20
 
 #### `define `[`ISO_T_P2_MIN_LIMIT`](#_k_w_p2000_8cpp_1ae4b897217d8a7cb71d4e5e8de2d88470) 
 
 #### `define `[`ISO_T_P2_MAX_LIMIT`](#_k_w_p2000_8cpp_1aae59d60e1e6bf444727c996601afdfe0) 
 
+P2 time between tester request and ECU response or two ECU responses.
+
 #### `define `[`ISO_T_P3_MAX_LIMIT`](#_k_w_p2000_8cpp_1a8720dab33fbb5c524752090fab43bc3c) 
+
+P3 time between end of ECU responses and start of new tester request.
 
 #### `define `[`ISO_T_P4_MAX_LIMIT`](#_k_w_p2000_8cpp_1aaa520653e7d97461654cf65413a1e402) 
 
+inter byte time for tester request
+
 #### `define `[`ISO_T_IDLE_NEW`](#_k_w_p2000_8cpp_1aaaf57595b6c6f1fa84605254930e8ad2) 
+
+min 300, max undefinied
 
 #### `define `[`ISO_T_INIL`](#_k_w_p2000_8cpp_1af51a5a6e779aeca1e37e990663601a84) 
 
+Initialization low time.
+
 #### `define `[`ISO_T_WUP`](#_k_w_p2000_8cpp_1a5ed4b5035e009d1d074a38128c025e1c) 
 
+Wake up Pattern.
+
 #### `define `[`request_ok`](#_p_i_ds_8h_1a78ce7705e54cbaa84ea562d4049227d2) 
-
-#### `define `[`GSXR`](#_p_i_ds_8h_1a5ffea234579c7d4a872aac17ff3e2118) 
-
-#### `define `[`PID_SPEED`](#_p_i_ds_8h_1a753f7ff15778c8b24c46f36e46dc86bb) 
-
-#### `define `[`PID_RPM_H`](#_p_i_ds_8h_1a41a41bd707e1e0b925b24cba3ef76eeb) 
-
-#### `define `[`PID_RPM_L`](#_p_i_ds_8h_1a144ed0f0bf3b4ca96f76975059e4f6b9) 
-
-#### `define `[`PID_TPS`](#_p_i_ds_8h_1a9da7c58e2c88f6071faf4defd385803b) 
-
-#### `define `[`PID_IAP`](#_p_i_ds_8h_1aa7b8920a2d9b490685845b297ed3ced6) 
-
-#### `define `[`PID_ECT`](#_p_i_ds_8h_1a55cb743016a89bc3a62025b491321f9a) 
-
-#### `define `[`PID_IAT`](#_p_i_ds_8h_1a712f0575160f7ae54053d1f8cbd18d05) 
-
-#### `define `[`PID_AP`](#_p_i_ds_8h_1add548a477a683d6419ba9fe9fde56144) 
-
-#### `define `[`PID_BATT`](#_p_i_ds_8h_1af3c7e1d2be42e2901208ed2a8edc3a0a) 
-
-#### `define `[`PID_HO2`](#_p_i_ds_8h_1a99fea456a8c45cb852534353e2ae1093) 
-
-#### `define `[`PID_GPS`](#_p_i_ds_8h_1aed472d4f03bf6a34f4d49b22de44881b) 
-
-#### `define `[`PID_STPS`](#_p_i_ds_8h_1a104df7967e33bb727cd3b13bb956a300) 
-
-#### `define `[`PID_PAIR`](#_p_i_ds_8h_1a33195c8180ee7a94b1c56c3de436b4f8) 
-
-#### `define `[`PID_CLUTCH`](#_p_i_ds_8h_1a8a7da3b5aecb24e53464219f93469656) 
-
-#### `define `[`PID_GEAR_3`](#_p_i_ds_8h_1aa6dd7e0ad53e4091c59f4a4b167bf04f) 
 
 #### `enum `[`error_enum`](#_k_w_p2000_8cpp_1ae7c16c55057fcaccff98f9725ba4d4ab) 
 
@@ -101,25 +75,27 @@ This is a a collection of possible ECU Errors.
 
  Values                         | Descriptions                                
 --------------------------------|---------------------------------------------
-EE_TEST            | 
-EE_START            | 
-EE_STOP            | 
-EE_TO            | 
-EE_FROM            | 
-EE_CS            | 
-EE_ECHO            | 
-EE_UNEX            | 
-EE_HEADER            | 
-EE_USER            | 
-EE_CONFIG            | 
-EE_P3MAX            | 
-EE_CR            | 
-EE_ATP            | 
-EE_WR            | 
-EE_US            | 
-EE_TOTAL            | 
+EE_TEST            | for various test
+EE_START            | unable to start comunication
+EE_STOP            | unable to stop comunication
+EE_TO            | data is not for us
+EE_FROM            | data don't came from the ECU
+EE_CS            | checksum error
+EE_ECHO            | echo error
+EE_UNEX            | unexpected error
+EE_HEADER            | strange header
+EE_USER            | error due to wrong call of a function
+EE_CONFIG            | strange config value in the key bytes
+EE_P3MAX            | time out communication
+EE_CR            | check response error
+EE_ATP            | problem setting the timing parameter
+EE_WR            | We get a reject for a request we didn't sent.
+EE_US            | not supported, yet
+EE_TOTAL            | this is just to know how many possible errors are in this enum
 
 #### `enum `[`debug_enum`](#_k_w_p2000_8h_1ad078f8d8e69df174a8cac511c1c069ab) 
+
+Collection of possible debug levels.
 
  Values                         | Descriptions                                
 --------------------------------|---------------------------------------------
@@ -153,7 +129,7 @@ DEBUG_LEVEL_VERBOSE            |
 `public int8_t `[`getStatus`](#class_k_w_p2000_1ae52be2a2e5b21646da2bfcdc595b15f4)`()` | Get the connection status.
 `public int8_t `[`getError`](#class_k_w_p2000_1a2b1b535611064e42990ebfe292c3f53a)`()` | This say you only if there are/aren't errors, to see them use `[printStatus()](#class_k_w_p2000_1afefd32e48fc101c9b2307aa9a2c498b2)`
 `public void `[`resetError`](#class_k_w_p2000_1a44fbde61c33c7cbe7b7abc881735c595)`()` | Reset the errors from the ECU, use with caution.
-`public uint8_t `[`getGPS`](#class_k_w_p2000_1a8981e2ea9bc9f222518e913965146b7e)`()` | Get*.
+`public uint8_t `[`getGPS`](#class_k_w_p2000_1a8981e2ea9bc9f222518e913965146b7e)`()` | Get* the ECU value you need: GPS, RPM, SPEED, TPS, IAP, IAT, ECT, STPS, more coming.
 `public uint8_t `[`getRPM`](#class_k_w_p2000_1a89113f189900e5d00a34ef48b144a3e4)`()` | 
 `public uint8_t `[`getSPEED`](#class_k_w_p2000_1a456e9b164d6eaa2ed3eea97ded4cb7a5)`()` | 
 `public uint8_t `[`getTPS`](#class_k_w_p2000_1aeb492557cd6d2fc085201b9c831c1051)`()` | 
@@ -303,10 +279,10 @@ Reset the errors from the ECU, use with caution.
 
 #### `public uint8_t `[`getGPS`](#class_k_w_p2000_1a8981e2ea9bc9f222518e913965146b7e)`()` 
 
-Get*.
+Get* the ECU value you need: GPS, RPM, SPEED, TPS, IAP, IAT, ECT, STPS, more coming.
 
 #### Returns
-uint8_t Get the sensor value from the ECU
+The sensor value from the ECU
 
 #### `public uint8_t `[`getRPM`](#class_k_w_p2000_1a89113f189900e5d00a34ef48b144a3e4)`()` 
 

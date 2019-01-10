@@ -22,56 +22,50 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include "Arduino.h"
 #include "KWP2000.h"
 #include "PIDs.h"
-#if defined(ARDUINO_ARCH_ESP32)
-#include <new>
-#endif
 
-#define maybe 2
+#define maybe 2 ///< used when we don't know yet the behaviour of the K-Line
 
-//#define FAHRENHEIT
-#define TO_FAHRENHEIT(x) x * 1.8 + 32
-#define LEN(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
+//#define FAHRENHEIT ///< decomment it if you want to use Fahrenheit instead of Celsius degrees
+#define TO_FAHRENHEIT(x) x * 1.8 + 32                                                   ///< the formula for the conversion
+#define LEN(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x]))))) ///< complex but safe macro for the lenght
 
 // These values are defined by the ISO protocol
-#define ISO_MAX_DATA 260 // maximum lenght of a response from the ecu: 255 data + 4 header + 1 checksum
+#define ISO_MAX_DATA 260 ///< maximum lenght of a response from the ecu: 255 data + 4 header + 1 checksum
 
-// all the times are an average between max and minimum
-#define ISO_T_P1 10 // inter byte time for ECU response - min: 0 max: 20
+#define ISO_T_P1 10 ///< inter byte time for ECU response - min: 0 max: 20
 #define ISO_T_P2_MIN_LIMIT 50
-#define ISO_T_P2_MAX_LIMIT 89600
-#define ISO_T_P3_MAX_LIMIT 89600
-// P2 time between tester request and ECU response or two ECU responses
-// P3 time between end of ECU responses and start of new tester request
-#define ISO_T_P4_MAX_LIMIT 20 //inter byte time for tester request
+#define ISO_T_P2_MAX_LIMIT 89600 ///< P2 time between tester request and ECU response or two ECU responses
+#define ISO_T_P3_MAX_LIMIT 89600 ///< P3 time between end of ECU responses and start of new tester request
+#define ISO_T_P4_MAX_LIMIT 20    ///< inter byte time for tester request
 // P2 (min & max), P3 (min & max) and P4 (min) are defined by the ECU with accessTimingParameter()
 
 // Initialization
-#define ISO_T_IDLE_NEW 2000         // min 300, max undefinied
-#define ISO_T_INIL (unsigned int)25 // Initialization low time
-#define ISO_T_WUP (unsigned int)50  // Wake up Pattern
+#define ISO_T_IDLE_NEW 2000         ///< min 300, max undefinied
+#define ISO_T_INIL (unsigned int)25 ///< Initialization low time
+#define ISO_T_WUP (unsigned int)50  ///< Wake up Pattern
 
 /**
  * @brief This is a a collection of  possible ECU Errors
  */
 enum error_enum
 {
-    EE_TEST,   // for various test
-    EE_START,  // unable to start comunication
-    EE_STOP,   // unable to stop comunication
-    EE_TO,     // data is not for us
-    EE_FROM,   // data don't came from the ECU
-    EE_CS,     // checksum error
-    EE_ECHO,   // echo error
-    EE_UNEX,   // unexpected error
-    EE_HEADER, // strange header
-    EE_USER,   // error due to wrong call of a function
-    EE_CONFIG, // strange config value in the key bytes
-    EE_P3MAX,  // time out communication
-    EE_CR,     // check response error
-    EE_ATP,    // problem setting the timing parameter
-    EE_WR,     // We get a reject for a request we didn't sent
-    EE_US,     // not supported, yet
-    EE_TOTAL   // this is just to know how many possible errors are in this enum
+    EE_TEST,   ///< for various test
+    EE_START,  ///< unable to start comunication
+    EE_STOP,   ///< unable to stop comunication
+    EE_TO,     ///< data is not for us
+    EE_FROM,   ///< data don't came from the ECU
+    EE_CS,     ///< checksum error
+    EE_ECHO,   ///< echo error
+    EE_UNEX,   ///< unexpected error
+    EE_HEADER, ///< strange header
+    EE_USER,   ///< error due to wrong call of a function
+    EE_CONFIG, ///< strange config value in the key bytes
+    EE_P3MAX,  ///< time out communication
+    EE_CR,     ///< check response error
+    EE_ATP,    ///< problem setting the timing parameter
+    EE_WR,     ///< We get a reject for a request we didn't sent
+    EE_US,     ///< not supported, yet
+    EE_TOTAL   ///< this is just to know how many possible errors are in this enum
 };
 
 ////////////// CONSTRUCTOR ////////////////
@@ -137,7 +131,6 @@ void KWP2000::setDebugLevel(const uint8_t debug_level)
 
 /**
  * @brief Disable the debug
- * 
  */
 void KWP2000::disableDebug()
 {
@@ -431,7 +424,6 @@ int8_t KWP2000::stopKline()
 
 /**
  * @brief Send a request to the ECU asking for data from all the sensors, to see them you can use `printSensorsData()`
- * 
  */
 void KWP2000::requestSensorsData()
 {
@@ -450,23 +442,25 @@ void KWP2000::requestSensorsData()
         _debug->println(F("Requesting Sensors Data"));
     }
 
-#if defined(GSXR)
+#if defined(SUZUKI)
 
-    sendRequest(request_sens, LEN(request_sens));
-    listenResponse();
+    handleRequest(request_sens, LEN(request_sens));
 
-#elif defined(NINJA)
+#elif defined(KAWASAKI)
 
-    for (uint8_t request = 0; request < LEN(request_sens); request++)
+    for (uint8_t sensor = 0; sensor < LEN(request_sens); sensor++)
     {
-        sendRequest(request_sens[request], LEN(request_sens[request]));
-        listenResponse();
-        //increase addres of _response
+        handleRequest(request_sens[sensor], LEN(request_sens[sensor]));
+        //todo increase addres of _response
     }
 
-#elif defined(CBR)
+#elif defined(HONDA)
 
-#elif defined(R)
+    handleRequest(request_sens, LEN(request_sens));
+
+#elif defined(YAMAHA)
+
+    handleRequest(request_sens, LEN(request_sens));
 
 #endif
 
@@ -556,7 +550,20 @@ void KWP2000::keepAlive(uint16_t time)
     if (millis() - _last_correct_response >= ISO_T_P3_MAX)
     {
         // the connection has been lost
-        connectionExpired();
+        if (_stop_sequence_started == false)
+        {
+            if (_debug_level == DEBUG_LEVEL_VERBOSE)
+            {
+                _debug->println(F("\nConnection expired"));
+            }
+            _ECU_status = false;
+            _last_data_print = 0;
+            _last_sensors_calculated = 0;
+            _last_status_print = 0;
+            _connection_time = 0;
+            _kline->end();
+            setError(EE_P3MAX);
+        }
         return;
     }
 
@@ -721,7 +728,6 @@ void KWP2000::accessTimingParameter(const uint8_t read_only)
 
 /**
  * @brief Reset the Timing Parameters to the default settings from the ECU
- * 
  */
 void KWP2000::resetTimingParameter()
 {
@@ -990,7 +996,6 @@ void KWP2000::printStatus(uint16_t time)
 
 /**
  * @brief Print all the sensors data from the ECU, you need to run `requestSensorsData()` before
- * 
  */
 void KWP2000::printSensorsData()
 {
@@ -1047,7 +1052,6 @@ void KWP2000::printSensorsData()
 
 /**
  * @brief Print the last response received from the ECU
- * 
  */
 void KWP2000::printLastResponse()
 {
@@ -1094,7 +1098,6 @@ int8_t KWP2000::getError()
 
 /**
  * @brief Reset the errors from the ECU, use with caution
- * 
  */
 void KWP2000::resetError()
 {
@@ -1102,9 +1105,9 @@ void KWP2000::resetError()
 }
 
 /**
- * @brief Get*
+ * @brief Get* the ECU value you need: GPS, RPM, SPEED, TPS, IAP, IAT, ECT, STPS, more coming
  * 
- * @return uint8_t Get the sensor value from the ECU
+ * @return The sensor value from the ECU
  */
 uint8_t KWP2000::getGPS()
 {
@@ -1148,6 +1151,14 @@ uint8_t KWP2000::getSTPS()
 
 /////////////////// PRIVATE ///////////////////////
 
+/**
+ * @brief Generate and send a request to the ECU
+ * 
+ * @param pid The PID you want to send
+ * @param pid_len the lenght of the PID, get it with `sizeof()` 
+ * @param wait_to_send_all Choose to wait untill the tx buffer is empty
+ * @param use_delay Choose to wait at the end of the function or to do other tasks
+ */
 void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint8_t wait_to_send_all, const uint8_t use_delay)
 {
     uint8_t echo = 0;
@@ -1243,6 +1254,11 @@ void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint
     }
 }
 
+/**
+ * @brief Listen and process the response from the ECU
+ * 
+ * @param use_delay Choose to wait at the end of the function or to do other tasks
+ */
 void KWP2000::listenResponse(const uint8_t use_delay)
 {
     // reset _response
@@ -1519,15 +1535,21 @@ void KWP2000::listenResponse(const uint8_t use_delay)
     }
 }
 
-int8_t KWP2000::checkResponse(const uint8_t response_sent[])
+/**
+ * @brief Compare the given response to the correct one which should be received
+ * 
+ * @param request_sent The request sent to the ECU
+ * @return int8_t `true` if the response is correct, a `negative number` if is not
+ */
+int8_t KWP2000::checkResponse(const uint8_t request_sent[])
 {
-    if (_response[_response_data_start] == (request_ok(response_sent[0])))
+    if (_response[_response_data_start] == (request_ok(request_sent[0])))
     {
         if (_debug_level == DEBUG_LEVEL_VERBOSE)
         {
             _debug->println(F("\nCorrect response from the ECU\n"));
         }
-        return 1;
+        return true;
     }
     else if (_response[_response_data_start] == 0)
     {
@@ -1544,7 +1566,7 @@ int8_t KWP2000::checkResponse(const uint8_t response_sent[])
             _debug->print(F("\nRequest rejected with code: "));
         }
 
-        if (_response[_response_data_start + 1] != response_sent[0])
+        if (_response[_response_data_start + 1] != request_sent[0])
         {
             // this is not the request we sent!
             setError(EE_WR);
@@ -1640,16 +1662,29 @@ int8_t KWP2000::checkResponse(const uint8_t response_sent[])
     return -10;
 }
 
+/**
+ * @brief Set errors from `error_enum`
+ * 
+ * @param error The error you want to set
+ */
 void KWP2000::setError(const uint8_t error)
 {
     bitSet(_ECU_error, error);
 }
 
+/**
+ * @brief Clear errors from `error_enum`
+ * 
+ * @param error The error you want to clear
+ */
 void KWP2000::clearError(const uint8_t error)
 {
     bitClear(_ECU_error, error);
 }
 
+/**
+ * @brief Configure the K-Line behaviour from the keybytes received by the ECU 
+ */
 void KWP2000::configureKline()
 {
     // get the key bytes
@@ -1763,8 +1798,13 @@ void KWP2000::configureKline()
     }
 }
 
-// Checksum is the sum of all data bytes modulo (&) 0xFF
-// (same as being truncated to one byte)
+/**
+ * @brief The checksum is the sum of all data bytes modulo (&) 0xFF (same as being truncated to one byte)
+ * 
+ * @param data All the bytes received
+ * @param data_len The lenght of the response
+ * @return uint8_t The correct checksum
+ */
 uint8_t KWP2000::calc_checksum(const uint8_t data[], const uint8_t data_len)
 {
     uint8_t cs = 0;
@@ -1775,6 +1815,11 @@ uint8_t KWP2000::calc_checksum(const uint8_t data[], const uint8_t data_len)
     return cs;
 }
 
+/**
+ * @brief This is called when the last byte is received from the ECU
+ * 
+ * @param received_checksum The last byte received which is the checksum
+ */
 void KWP2000::endResponse(const uint8_t received_checksum)
 {
     uint8_t correct_checksum;
@@ -1805,23 +1850,5 @@ void KWP2000::endResponse(const uint8_t received_checksum)
             _debug->println(correct_checksum, HEX);
         }
         setError(EE_CS);
-    }
-}
-
-void KWP2000::connectionExpired()
-{
-    if (_stop_sequence_started == false)
-    {
-        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-        {
-            _debug->println(F("\nConnection expired"));
-        }
-        _ECU_status = false;
-        _last_data_print = 0;
-        _last_sensors_calculated = 0;
-        _last_status_print = 0;
-        _connection_time = 0;
-        _kline->end();
-        setError(EE_P3MAX);
     }
 }

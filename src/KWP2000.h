@@ -38,7 +38,10 @@ check verbose/default levels
 #ifndef KWP2000_h
 #define KWP2000_h
 
-enum debug_enum // debug levels
+/**
+ * @brief Collection of possible debug levels
+ */
+enum debug_enum
 {
   DEBUG_LEVEL_NONE,
   DEBUG_LEVEL_DEFAULT,
@@ -87,7 +90,7 @@ public:
   uint8_t getSTPS();
 
 private:
-  // k line
+  // K-Line
   HardwareSerial *_kline;
   uint32_t _kline_baudrate;
   uint8_t _k_out_pin;
