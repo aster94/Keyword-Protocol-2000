@@ -75,7 +75,7 @@ enum error_enum
  * 
  * @param kline_serial The Serial port you will use to communicate with the ECU
  * @param k_out_pin The TX pin of this serial
- * @param kline_baudrate The baudrate for the kline (defaut to 10400)
+ * @param kline_baudrate Optional, defaut to `10400`. The baudrate for the kline, 
  */
 KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint32_t kline_baudrate)
 {
@@ -90,8 +90,8 @@ KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const ui
  * @brief Enable the debug of the communication
  * 
  * @param debug_serial The Serial port you will use for the debug information
- * @param debug_level Default: `DEBUG_LEVEL_DEFAULT` The verbosity of the debug
- * @param debug_baudrate Default: `115200` The baudrate for the debug
+ * @param debug_level Optional, default to `DEBUG_LEVEL_DEFAULT`. The verbosity of the debug
+ * @param debug_baudrate Optional, default to `115200`. The baudrate for the debug
  */
 void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint8_t debug_level, const uint32_t debug_baudrate)
 {
@@ -155,7 +155,7 @@ void KWP2000::enableDealerMode(const uint8_t dealer_pin)
 }
 
 /**
- * @brief Enable/Disable the Dealer Mode
+ * @brief Only for Suzuki: Enable/Disable the Dealer Mode
  * 
  * @param dealer_mode Choose between true/false
  */
@@ -175,7 +175,7 @@ void KWP2000::dealerMode(const uint8_t dealer_mode)
 /**
  * @brief Inizialize the the communication through the K-Line
  * 
- * @return int8_t return `0` until the connection is not established, then `true` if there aren't any errors, a `negative number` otherwise
+ * @return `0` until the connection is not established, then `true` if there aren't any errors, a `negative number` otherwise
  */
 int8_t KWP2000::initKline()
 {
@@ -348,7 +348,7 @@ int8_t KWP2000::initKline()
 /**
  * @brief Close the communication with the motorbike
  * 
- * @return int8_t return `0` until the connection is not closed, then `true` if there aren't any errors, a `negative number` otherwise
+ * @return `0` until the connection is not closed, then `true` if there aren't any errors, a `negative number` otherwise
  */
 int8_t KWP2000::stopKline()
 {
@@ -445,25 +445,6 @@ void KWP2000::requestSensorsData()
 #if defined(SUZUKI)
 
     handleRequest(request_sens, LEN(request_sens));
-
-#elif defined(KAWASAKI)
-
-    for (uint8_t sensor = 0; sensor < LEN(request_sens); sensor++)
-    {
-        handleRequest(request_sens[sensor], LEN(request_sens[sensor]));
-        //todo increase addres of _response
-    }
-
-#elif defined(HONDA)
-
-    handleRequest(request_sens, LEN(request_sens));
-
-#elif defined(YAMAHA)
-
-    handleRequest(request_sens, LEN(request_sens));
-
-#endif
-
     //GPS (Gear Position Sensor)
     _GEAR1 = _response[PID_GPS];
     _GEAR2 = _response[PID_CLUTCH];
@@ -508,8 +489,25 @@ void KWP2000::requestSensorsData()
     PAIR = _response[59];
     */
 
-// convert the temperature value if we are using them
-#ifdef FAHRENHEIT
+#elif defined(KAWASAKI)
+
+    for (uint8_t sensor = 0; sensor < LEN(request_sens[0]); sensor++)
+    {
+        handleRequest(request_sens[sensor], LEN(request_sens[sensor]));
+        //todo increase addres of _response
+    }
+
+#elif defined(YAMAHA)
+
+    handleRequest(request_sens, LEN(request_sens));
+
+#elif defined(HONDA)
+
+    handleRequest(request_sens, LEN(request_sens));
+
+#endif
+
+#ifdef FAHRENHEIT // convert the temperature values to fahrenheit
     _IAT = TO_FAHRENHEIT(_IAT);
     _ECT = TO_FAHRENHEIT(_ECT);
 #endif
@@ -518,9 +516,61 @@ void KWP2000::requestSensorsData()
 }
 
 /**
+ * @brief Read the Diagnostic Trouble Codes (DTC) from the ECU
+ * 
+ * @param which Optional, default to `READ_ONLY_ACTIVE`. One of the values from the `trouble_codes` enum
+ */
+void KWP2000::readTroubleCodes(const uint8_t which)
+{
+    if (which == READ_TOTAL)
+    {
+        handleRequest(trouble_codes_all, LEN(trouble_codes_all));
+    }
+    else if (which == READ_ONLY_ACTIVE)
+    {
+        handleRequest(trouble_codes_only_active, LEN(trouble_codes_only_active));
+    }
+    else if (which == READ_ALL)
+    {
+        handleRequest(trouble_codes_with_status, LEN(trouble_codes_with_status));
+    }
+
+    const uint8_t DTC_total = _response[_response_data_start + 1]; // Diagnosis trouble codes
+    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+    {
+        _debug->print("There are ");
+        _debug->print(DTC_total);
+        _debug->println(" errors\n");
+        for (uint8_t n = _response_data_start + 2; n < _response_len; n++)
+        {
+            _debug->print(_response[n]); // todo needed more test to understand the DTC number, value and status parameters
+        }
+        _debug->println();
+    }
+}
+
+/**
+ * @brief Clear the DTC from the ECU
+ * 
+ * @param code Optional. Only the passed `code` will be cleared
+ */
+void KWP2000::clearTroubleCodes(const uint8_t code)
+{
+    if (code == 0x00) // Clear all
+    {
+        handleRequest(clear_trouble_codes, LEN(clear_trouble_codes));
+    }
+    else // clear a single error provided by the user
+    {
+        const uint8_t to_clear[] = {clear_trouble_codes[0], code};
+        handleRequest(to_clear, LEN(to_clear));
+    }
+}
+
+/**
  * @brief Keep the connection through the K-Line alive
  * 
- * @param time It is calculated automatically to be a safe interval
+ * @param time Optional. It is calculated automatically to be a safe interval
  */
 void KWP2000::keepAlive(uint16_t time)
 {
@@ -590,31 +640,41 @@ void KWP2000::keepAlive(uint16_t time)
         _debug->print(F("\nKeeping connection alive\nLast:"));
         _debug->println(millis() - _last_correct_response);
     }
-#if defined(GSXR)
-    sendRequest(request_sens, LEN(request_sens));
-#elif defined(NINJA)
-    sendRequest(request_sens[0], LEN(request_sens[0][0]));
-#elif defined(CBR)
-    sendRequest(request_sens, LEN(request_sens));
-#elif defined(R)
-    sendRequest(request_sens, LEN(request_sens));
+#if defined(SUZUKI)
+    handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
+#elif defined(KAWASAKI)
+    handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
+#elif defined(YAMAYA)
+    handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
+#elif defined(HONDA)
+    handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
 #endif
-    listenResponse();
 }
 
 ////////////// COMMUNICATION - Advanced ////////////////
-
 /**
- * @brief This function is part of the core of the library. You just need to give a PID and it will generate the header, calculate the checksum and try to send the request with error hadling options
+ * @brief This function is the core of the library. You just need to give a PID and it will generate the header, calculate the checksum and try to send the request. 
+ *          Then it will check if the response is correct and if now it will try to send the request another two times, all is based on the ISO14230
  * 
  * @param to_send The PID you want to send, see PID.h for more detail
  * @param send_len The lenght of the PID (use `sizeof` to get it)
- * @return int8_t return `true` if the request has been sent and a correct response has been received, a `negative number` otherwise
+ * @param try_once Optional, default to `false`. Choose if you want to try to send the request 3 times in case of error
+ * @return `true` if the request has been sent and a correct response has been received, a `negative number` otherwise
  */
-int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len)
+int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t try_once)
 {
-    uint8_t attempt = 1;
+    uint8_t attempt;
     uint8_t completed = false;
+
+    if (try_once == true)
+    {
+        attempt = 3;
+    }
+    else
+    {
+        attempt = 1;
+    }
+
     while (attempt <= 3 && completed == false)
     {
         sendRequest(to_send, send_len);
@@ -651,7 +711,7 @@ int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len)
 /**
  * @brief Ask and print the Timing Parameters from the ECU
  * 
- * @param read_only Default: `true` this avoid the possibility to unintentionally change them
+ * @param read_only Optional, default to `true`. This avoid the possibility to unintentionally change them
  */
 void KWP2000::accessTimingParameter(const uint8_t read_only)
 {
@@ -884,7 +944,7 @@ void KWP2000::changeTimingParameter(uint32_t new_atp[], const uint8_t new_atp_le
 /**
  * @brief Print a rich and useful set of information about the ECU status and errors
  * 
- * @param time Default: `2000ms` the time between one print and the other
+ * @param time Optional, default to `2000`milliseconds. The time between one print and the other
  */
 void KWP2000::printStatus(uint16_t time)
 {
@@ -907,21 +967,31 @@ void KWP2000::printStatus(uint16_t time)
         _debug->println(_ECU_status == 1 ? "Connected" : "Not connected");
         _debug->print(F("Errors:\t\t\t"));
         _debug->println(_ECU_error == 0 ? "No" : "Yes");
-        _debug->print(F("Last data:\t\t"));
-        _debug->println(_last_correct_response == 0 ? "Never"
-                                                    : String((millis() - _last_correct_response) / 1000.0, 2) + " seconds ago");
-        _debug->print(F("Connection time:"));
-        _debug->println(_connection_time == 0 ? "Not now"
-                                              : String((millis() - _connection_time) / 1000.0, 2) + " seconds ago");
+
+        if (_last_correct_response != 0)
+        {
+            _debug->print(F("Last data:\t\t"));
+            _debug->print((millis() - _last_correct_response) / 1000.0);
+            _debug->print(F(" seconds ago"));
+        }
+
+        if (_connection_time != 0)
+        {
+            _debug->print(F("Connection time:"));
+            _debug->print((millis() - _connection_time) / 1000.0);
+            _debug->println(" seconds ago");
+        }
+
         _debug->print(F("Baudrate:\t\t"));
         _debug->println(_kline_baudrate);
         _debug->print(F("K-line TX pin:\t"));
         _debug->println(_k_out_pin);
+#if defined(SUZUKI)
         _debug->print(F("Dealer pin:\t\t"));
         _debug->println(_dealer_pin);
         _debug->print(F("Dealer mode:\t"));
         _debug->println(_dealer_mode == 1 ? "Enabled" : "Disabled");
-
+#endif
         //other stuff?
         if (_ECU_error != 0)
         {
@@ -1072,7 +1142,7 @@ void KWP2000::printLastResponse()
 /**
  * @brief Get the connection status
  * 
- * @return int8_t It could be `true` or `false`
+ * @return It could be `true` or `false`
  */
 int8_t KWP2000::getStatus()
 {
@@ -1082,7 +1152,7 @@ int8_t KWP2000::getStatus()
 /**
  * @brief This say you only if there are/aren't errors, to see them use `printStatus()`
  * 
- * @return int8_t It could be `true` or `false`
+ * @return It could be `true` or `false`
  */
 int8_t KWP2000::getError()
 {
@@ -1105,8 +1175,15 @@ void KWP2000::resetError()
 }
 
 /**
- * @brief Get* the ECU value you need: GPS, RPM, SPEED, TPS, IAP, IAT, ECT, STPS, more coming
- * 
+ * @brief Get* the ECU sensor value you need
+ * GPS: Gear Position Sensor
+ * RPM: Right Per Minutes
+ * SPEED: speed of the bike
+ * TPS: Throttle Position Sensor
+ * IAP: Intake Air Pressure
+ * IAT: Intake Air Temperature
+ * ECT: Engine Coolant Temperature
+ * STPS: Secondary Throttle Position Sensor
  * @return The sensor value from the ECU
  */
 uint8_t KWP2000::getGPS()
@@ -1539,7 +1616,7 @@ void KWP2000::listenResponse(const uint8_t use_delay)
  * @brief Compare the given response to the correct one which should be received
  * 
  * @param request_sent The request sent to the ECU
- * @return int8_t `true` if the response is correct, a `negative number` if is not
+ * @return `true` if the response is correct, a `negative number` if is not
  */
 int8_t KWP2000::checkResponse(const uint8_t request_sent[])
 {
@@ -1601,9 +1678,10 @@ int8_t KWP2000::checkResponse(const uint8_t request_sent[])
         case 0x21:
             if (_debug_level == DEBUG_LEVEL_VERBOSE)
             {
-                _debug->println(F("Busy\n"));
+                _debug->println(F("Busy, reapeat\n"));
             }
-            // would you call me later?
+            setError(EE_US);
+            //todo send again the request
             return -5;
 
         case 0x22:
@@ -1612,7 +1690,29 @@ int8_t KWP2000::checkResponse(const uint8_t request_sent[])
                 _debug->println(F("Conditions Not Correct or Request Sequence Error\n"));
             }
             return -6;
-
+            /*
+            todo
+            23 routineNotComplete 
+            31 requestOutOfRange 
+            33 securityAccessDenied 
+            35 invalidKey 
+            36 exceedNumberOfAttempts 
+            37 requiredTimeDelayNotExpired 
+            40 downloadNotAccepted 
+            41 improperDownloadType 
+            42 can 'tDownloadToSpecifiedAddress                
+            43 can' tDownloadNumberOfBytesRequested
+            50 uploadNotAccepted
+            51 improperUploadType 
+            52 can 'tUploadFromSpecifiedAddress                 
+            53 can' tUploadNumberOfBytesRequested 
+            71 transferSuspended 
+            72 transferAborted 
+            74 illegalAddressInBlockTransfer 
+            75 illegalByteCountInBlockTransfer 
+            76 illegalBlockTransferType 
+            77 blockTransferDataChecksumError
+            */
         case 0x78:
             if (_debug_level == DEBUG_LEVEL_VERBOSE)
             {
@@ -1634,7 +1734,11 @@ int8_t KWP2000::checkResponse(const uint8_t request_sent[])
             */
             setError(EE_US);
             return -7;
-
+            /*
+            todo
+            79  incorrectByteCountDuringBlockTransfer
+            80 - FF manufacturerSpecificCodes
+            */
         default:
             if (_debug_level == DEBUG_LEVEL_VERBOSE)
             {
@@ -1803,7 +1907,7 @@ void KWP2000::configureKline()
  * 
  * @param data All the bytes received
  * @param data_len The lenght of the response
- * @return uint8_t The correct checksum
+ * @return The correct checksum
  */
 uint8_t KWP2000::calc_checksum(const uint8_t data[], const uint8_t data_len)
 {

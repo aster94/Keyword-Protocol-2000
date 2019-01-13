@@ -53,6 +53,10 @@ void loop()
             ECU.dealerMode(dealer_status);
             break;
 
+        case 'D':
+            ECU.readTroubleCodes();
+            break;
+
         case 's':
             ECU.requestSensorsData();
             ECU.printSensorsData();

@@ -12,8 +12,11 @@ Many IC could be used as interface, for example:
 - MC33199
 - operational amplifiers/level shifter/transistors (**not recommended**)
 
-### Tested Vehicles
-- Suzuki GSX-R 600 L1 (2011)
+### List of Vehicles
+
+| Motorbike     | Year      | Tested |
+| ------------- |---------- |------- |
+| GSX-R600      | 2011      | ✔️    |
 
 
 # Usage
@@ -36,7 +39,7 @@ First of all go to [PIDs.h](/src/PIDs.h) and decomment (delete the `//` symbols)
 
 
 ### Installation
-Simply add this from the Arduino/PlatformIO Library Manager or download this repository and add it to your library folder
+Simply search for `KWP2000` in the Arduino/PlatformIO Library Manager or download this repository and add it to your library folder
 
 
 ### Development

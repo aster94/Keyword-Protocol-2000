@@ -4,6 +4,10 @@
 - test on other bikes
 - discover new PIDs
 
+#### 1.1.0 - jan 13, 2019
+- added `readTroubleCodes()` and `clearTroubleCodes()`
+- small fixes
+
 #### 1.0.0 - jan 10, 2019
 - version promoted for pubblication on the arduino library manager
 - code cleaner
