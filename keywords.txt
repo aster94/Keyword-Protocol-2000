@@ -6,52 +6,52 @@
 # Datatypes (KEYWORD1)
 #######################################
 
-KWP2000                 KEYWORD1
+KWP2000	KEYWORD1
 
 #######################################
 # Methods and Functions (KEYWORD2)
 #######################################
 
-enableDebug             KEYWORD2
-setDebugLevel           KEYWORD2
-disableDebug            KEYWORD2
-enableDealerMode        KEYWORD2        
-dealerMode              KEYWORD2
+enableDebug	KEYWORD2
+setDebugLevel	KEYWORD2
+disableDebug	KEYWORD2
+enableDealerMode	KEYWORD2
+dealerMode	KEYWORD2
 
-initKline               KEYWORD2
-stopKline               KEYWORD2
-requestSensorsData      KEYWORD2
-readTroubleCodes        KEYWORD2
-clearTroubleCodes       KEYWORD2
-keepAlive               KEYWORD2
+initKline	KEYWORD2
+stopKline	KEYWORD2
+requestSensorsData	KEYWORD2
+readTroubleCodes	KEYWORD2
+clearTroubleCodes	KEYWORD2
+keepAlive	KEYWORD2
 
-handleRequest           KEYWORD2
-accessTimingParameter   KEYWORD2
-resetTimingParameter    KEYWORD2
-changeTimingParameter   KEYWORD2
+handleRequest	KEYWORD2
+accessTimingParameter	KEYWORD2
+resetTimingParameter	KEYWORD2
+changeTimingParameter	KEYWORD2
 
-printStatus             KEYWORD2
-printSensorsData        KEYWORD2
-printLastResponse       KEYWORD2
-getStatus               KEYWORD2
-getError                KEYWORD2
-resetError              KEYWORD2
-getGPS                  KEYWORD2
-getRPM                  KEYWORD2
-getSPEED                KEYWORD2
-getTPS                  KEYWORD2
-getIAP                  KEYWORD2
-getIAT                  KEYWORD2
-getECT                  KEYWORD2
-getSTPS                 KEYWORD2
+printStatus	KEYWORD2
+printSensorsData	KEYWORD2
+printLastResponse	KEYWORD2
+getStatus	KEYWORD2
+getError	KEYWORD2
+resetError	KEYWORD2
+getGPS	KEYWORD2
+getRPM	KEYWORD2
+getSPEED	KEYWORD2
+getTPS	KEYWORD2
+getIAP	KEYWORD2
+getIAT	KEYWORD2
+getECT	KEYWORD2
+getSTPS	KEYWORD2
 
 #######################################
 # Constants (LITERAL1)
 #######################################
 
-DEBUG_LEVEL_NONE        LITERAL1
-DEBUG_LEVEL_DEFAULT     LITERAL1
-DEBUG_LEVEL_VERBOSE     LITERAL1
-READ_TOTAL              LITERAL1
-READ_ONLY_ACTIVE        LITERAL1
-READ_ALL                LITERAL1
+DEBUG_LEVEL_NONE	LITERAL1
+DEBUG_LEVEL_DEFAULT	LITERAL1
+DEBUG_LEVEL_VERBOSE	LITERAL1
+READ_TOTAL	LITERAL1
+READ_ONLY_ACTIVE	LITERAL1
+READ_ALL	LITERAL1
