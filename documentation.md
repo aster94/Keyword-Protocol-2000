@@ -99,4 +99,4 @@ Description:
 
 
 
-Documentation generated with [Doxylite](https://github.com/aster94/Utilities)
+Documentation generated with Doxygen + [Doxylite](https://github.com/aster94/Utilities)
