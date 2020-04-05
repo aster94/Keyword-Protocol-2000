@@ -10,18 +10,23 @@ Many IC could be used as interface, for example:
 - L9637
 - MC33660
 - MC33199
-- operational amplifiers/level shifter/transistors (**not recommended**)
+- operational amplifiers/level shifter/transistors
 
 ### List of Vehicles
+
+The library should work on Suzuki and Kawasaki motorbikes. I didn't had the possibility to test on Yamaha and Honda bikes but I am willing to, if you own any one of the two open an issue and I will write some code for it.
+
+This is a list of motorcycles that have been successfully tested:
 
 | Motorbike     | Year      | Tested |
 | ------------- |---------- |------- |
 | GSX-R600      | 2011      | ✔️    |
+| Versys 650    | 2012      | ✔️    |
 
 
 # Usage
 ### Hardware
-You have to find the K-line of your bike. In Suzuki bikes it's under the rider's seat. You just need to connect the Kline, Vcc and Gnd to the driver IC you bought
+You have to find the K-line of your bike. In Suzuki bikes it's under the rider's seat, same on Kawasaki. You just need to connect the Kline, Vcc and Gnd to the driver IC you bought
 
 Example of the wiring for the L9636:
 
@@ -35,7 +40,7 @@ If you wish also to be able to enter easily into this mode add an optocoupler wi
 
 
 ### Software
-First of all go to [PIDs.h](/src/PIDs.h) and decomment (delete the `//` symbols) your motorbike, then upload any of the [examples](/examples/)
+First of all go to [PIDs.h](/src/PIDs.h) and de-comment (delete the `//` symbols) your motorbike, then upload any of the [examples](/examples/)
 
 
 ### Installation
@@ -49,17 +54,17 @@ I made a [ECU Emulator](/extras/ECU_Emulator) written in python for the developm
 ### Documentation
 Generally the functions return `true` if everything went fine, a `negative number` if there where any error, `false` if nothing changed
 
-This documentation has been automatically generated with doxygen + moxygen, an automatic documentation generator, I will make the formatting nicer later.
+This documentation has been automatically generated with doxygen + doxylite, an automatic documentation generator, I will make the formatting nicer later.
 
 See it here [documentation](documentation.md)
 
 
 # Disclaimer
-I do not assume and hereby disclaim any liability to any party for any damage to proprierty or person
+I do not assume and hereby disclaim any liability to any party for any damage to propriety or person
 
 
 # Influence:
-- [ECU Hacking forum](https://ecuhacking.activeboard.com/): 
+- [ECU Hacking forum](https://ecuhacking.activeboard.com/):
     - https://ecuhacking.activeboard.com/t56234221/kds-protocol
     - https://ecuhacking.activeboard.com/t22573776/sds-protocol/
 

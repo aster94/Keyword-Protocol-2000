@@ -1,40 +1,33 @@
 /*
 KWP2000.h
 
-Copyright (c) 2019 Aster94
+Copyright (c) Aster94
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
-and associated documentation files (the "Software"), to deal in the Software without restriction, 
-including without limitation the rights to use, copy, modify, merge, publish, distribute, 
-sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or 
+The above copyright notice and this permission notice shall be included in all copies or
 substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING 
-BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND 
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, 
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/*  TODO LIST 
+/*  TODO LIST
 check types
 pids from manzo / ecuhacking / forum ?
 make a two dimensional array to save errors?
 remove resetError?
 in keepalive should i try to send a request anyway instead of closing?
-remove echo?
-check with logic analyzer
-check if te ecu is connected before some functions
+check if the ecu is connected before some functions
 check if all serial have F
 check verbose/default levels
-
-before commits:
-update keywords.txt, changelog and library.properties
-check pids.h and add the //
-run doxygen + moxygen
 */
 
 #ifndef KWP2000_h
@@ -72,6 +65,8 @@ class KWP2000
     void disableDebug();
     void enableDealerMode(const uint8_t dealer_pin);
     void dealerMode(const uint8_t dealer_mode);
+	  void use_imperial();
+	  void use_metric();
 
     // COMMUNICATION - Basic
     int8_t initKline();
@@ -83,6 +78,7 @@ class KWP2000
 
     // COMMUNICATION - Advanced
     int8_t handleRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t try_once = false);
+    void checkTimingParameter();
     void accessTimingParameter(const uint8_t read_only = true);
     void resetTimingParameter();
     void changeTimingParameter(uint32_t new_atp[], const uint8_t new_atp_len);
@@ -121,19 +117,20 @@ class KWP2000
     uint8_t _request_len = 0;
     uint8_t _ECU_status = false;
     uint32_t _ECU_error = 0;
+    uint8_t _init_phase = 0;
 
     // k line config
-    uint8_t _use_lenght_byte = true;
+    uint8_t _use_length_byte = true;
     uint8_t _use_target_source_address = true;
     uint8_t _timing_parameter = true; // normal
-    uint16_t ISO_T_IDLE = 0;
+    //uint16_t ISO_T_IDLE = 0;
     uint8_t ISO_T_P2_MIN = 25;
     uint32_t ISO_T_P2_MAX = 50;
     uint16_t ISO_T_P3_MIN = 55;
     uint32_t ISO_T_P3_MAX = 2000;
     uint32_t ISO_T_P3_mdf = 2000;
     uint16_t ISO_T_P4_MIN = 10; // average between min and max value
-    uint16_t _keep_iso_alive = 1000;
+    uint16_t _keep_iso_alive = 1500;
 
     // debug
     HardwareSerial *_debug;
@@ -147,7 +144,9 @@ class KWP2000
     uint32_t _connection_time = 0;
 
     // sensors
-    uint8_t _GPS, _RPM, _SPEED, _TPS, _IAP, _ECT, _STPS, _IAT;
+    bool _use_metric_system = true;
+    uint16_t _RPM;
+    uint8_t _GPS, _SPEED, _TPS, _IAP, _ECT, _STPS, _IAT;
     uint8_t _GEAR1, _GEAR2, _GEAR3;
 
     // functions

@@ -1,21 +1,21 @@
 /*
 KWP2000.cpp
 
-Copyright (c) 2019 Aster94
+Copyright (c) Aster94
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
-and associated documentation files (the "Software"), to deal in the Software without restriction, 
-including without limitation the rights to use, copy, modify, merge, publish, distribute, 
-sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or 
+The above copyright notice and this permission notice shall be included in all copies or
 substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING 
-BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND 
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, 
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
@@ -25,12 +25,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 
 #define maybe 2 ///< used when we don't know yet the behaviour of the K-Line
 
-//#define FAHRENHEIT ///< decomment it if you want to use Fahrenheit instead of Celsius degrees
-#define TO_FAHRENHEIT(x) x * 1.8 + 32                                                   ///< the formula for the conversion
+#define TO_FAHRENHEIT(x) x * 1.8 + 32                                                   ///< the formula for the conversion from celsius to fahrenheit
+#define TO_MPH(x) x / 1.609                                                             ///< the formula for the conversion from km/h to mp/h
 #define LEN(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x]))))) ///< complex but safe macro for the lenght
 
 // These values are defined by the ISO protocol
-#define ISO_MAX_DATA 260 ///< maximum lenght of a response from the ecu: 255 data + 4 header + 1 checksum
+#define ISO_MAX_DATA 260 ///< maximum length of a response from the ecu: 255 data + 4 header + 1 checksum
 
 #define ISO_T_P1 10 ///< inter byte time for ECU response - min: 0 max: 20
 #define ISO_T_P2_MIN_LIMIT 50
@@ -40,7 +40,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 // P2 (min & max), P3 (min & max) and P4 (min) are defined by the ECU with accessTimingParameter()
 
 // Initialization
-#define ISO_T_IDLE_NEW 2000         ///< min 300, max undefinied
+#define ISO_T_IDLE 1000             ///< min 300, max undefined
 #define ISO_T_INIL (unsigned int)25 ///< Initialization low time
 #define ISO_T_WUP (unsigned int)50  ///< Wake up Pattern
 
@@ -62,7 +62,7 @@ enum error_enum
     EE_CONFIG, ///< strange config value in the key bytes
     EE_P3MAX,  ///< time out communication
     EE_CR,     ///< check response error
-    EE_ATP,    ///< problem setting the timing parameter
+    EE_ATP,    ///< problem setting/reading the timing parameter
     EE_WR,     ///< We get a reject for a request we didn't sent
     EE_US,     ///< not supported, yet
     EE_TOTAL   ///< this is just to know how many possible errors are in this enum
@@ -72,10 +72,10 @@ enum error_enum
 
 /**
  * @brief Constructor for the KWP2000 class
- * 
+ *
  * @param kline_serial The Serial port you will use to communicate with the ECU
  * @param k_out_pin The TX pin of this serial
- * @param kline_baudrate Optional, defaut to `10400`. The baudrate for the kline, 
+ * @param kline_baudrate Optional, defaut to `10400`. The baudrate for the kline,
  */
 KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint32_t kline_baudrate)
 {
@@ -88,7 +88,7 @@ KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const ui
 
 /**
  * @brief Enable the debug of the communication
- * 
+ *
  * @param debug_serial The Serial port you will use for the debug information
  * @param debug_level Optional, default to `DEBUG_LEVEL_DEFAULT`. The verbosity of the debug
  * @param debug_baudrate Optional, default to `115200`. The baudrate for the debug
@@ -108,7 +108,7 @@ void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint8_t debug_leve
 
 /**
  * @brief Change the debug level
- * 
+ *
  * @param debug_level choose between DEBUG_LEVEL_NONE DEBUG_LEVEL_DEFAULT DEBUG_LEVEL_VERBOSE
  */
 void KWP2000::setDebugLevel(const uint8_t debug_level)
@@ -144,7 +144,7 @@ void KWP2000::disableDebug()
 
 /**
  * @brief Only for Suzuki: Enable the Dealer Mode
- * 
+ *
  * @param dealer_pin The pin you will use to control it
  */
 void KWP2000::enableDealerMode(const uint8_t dealer_pin)
@@ -156,7 +156,7 @@ void KWP2000::enableDealerMode(const uint8_t dealer_pin)
 
 /**
  * @brief Only for Suzuki: Enable/Disable the Dealer Mode
- * 
+ *
  * @param dealer_mode Choose between true/false
  */
 void KWP2000::dealerMode(const uint8_t dealer_mode)
@@ -170,12 +170,21 @@ void KWP2000::dealerMode(const uint8_t dealer_mode)
     }
 }
 
+void KWP2000::use_imperial()
+{
+    _use_metric_system = false;
+}
+void KWP2000::use_metric()
+{
+    _use_metric_system = true;
+}
+
 ////////////// COMMUNICATION - Basic ////////////////
 
 /**
  * @brief Inizialize the the communication through the K-Line
- * 
- * @return `0` until the connection is not established, then `true` if there aren't any errors, a `negative number` otherwise
+ *
+ * @return int8_t `0` until the connection is not established, then `true` if there aren't any errors, a `negative number` otherwise
  */
 int8_t KWP2000::initKline()
 {
@@ -197,6 +206,7 @@ int8_t KWP2000::initKline()
             _debug->println(F("\nInitialize K-line"));
         }
 
+        /*
         if (ISO_T_IDLE == 0)
         {
             // first attempt to init the k-line
@@ -212,15 +222,18 @@ int8_t KWP2000::initKline()
             // after a stopKline
             ISO_T_IDLE = ISO_T_P3_MAX;
         }
+        */
 
-        _use_lenght_byte = false;
+        _use_length_byte = false;
         _use_target_source_address = true;
-        //_kline->end();
+        _kline->end();
+
+        digitalWrite(_k_out_pin, HIGH);
         pinMode(_k_out_pin, OUTPUT);
-        digitalWrite(_k_out_pin, LOW);
 
         _start_time = millis();
         _elapsed_time = 0;
+        _init_phase = 0;
         if (_debug_level == DEBUG_LEVEL_VERBOSE)
         {
             _debug->println(F("Starting sequence"));
@@ -228,126 +241,95 @@ int8_t KWP2000::initKline()
     }
     _elapsed_time = millis() - _start_time;
 
-    if (_elapsed_time < ISO_T_IDLE)
+    switch (_init_phase)
     {
-        if (digitalRead(_k_out_pin) != HIGH)
+    case 0: // this is a 1000ms HIGH signal
+        if (_elapsed_time > ISO_T_IDLE)
         {
-            digitalWrite(_k_out_pin, HIGH);
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                _debug->print(F("T0:\t"));
-                _debug->println(_elapsed_time);
-            }
+            _init_phase++;
         }
-        return 0;
-    }
-    else if ((_elapsed_time >= ISO_T_IDLE) && (_elapsed_time < ISO_T_IDLE + ISO_T_INIL))
-    {
-        if (digitalRead(_k_out_pin) != LOW)
+        break;
+    case 1:
+        digitalWrite(_k_out_pin, LOW);
+        _init_phase++;
+        break;
+    case 2: // this is a 25ms LOW signal
+        if (_elapsed_time > ISO_T_IDLE + ISO_T_INIL)
         {
-            digitalWrite(_k_out_pin, LOW);
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                _debug->print(F("T1:\t"));
-                _debug->println(_elapsed_time);
-            }
+            _init_phase++;
         }
-        return 0;
-    }
-    else if ((_elapsed_time >= ISO_T_IDLE + ISO_T_INIL) && (_elapsed_time < ISO_T_IDLE + ISO_T_WUP))
-    {
-        if (digitalRead(_k_out_pin) != HIGH)
+        break;
+    case 3:
+        digitalWrite(_k_out_pin, HIGH);
+        _init_phase++;
+        break;
+    case 4: // this is a 25ms HIGH signal
+        if (_elapsed_time > ISO_T_IDLE + ISO_T_WUP)
         {
-            digitalWrite(_k_out_pin, HIGH);
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                _debug->print(F("T2:\t"));
-                _debug->println(_elapsed_time);
-            }
+            _init_phase++;
         }
-        return 0;
-    }
-    else if (_elapsed_time >= (ISO_T_IDLE + ISO_T_WUP))
-    {
-        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-        {
-            _debug->print(F("T3:\t"));
-            _debug->println(_elapsed_time);
-            _debug->println(F("\nSending the start sequence"));
-        }
+        break;
+    case 5:
         _init_sequence_started = false;
-
         _start_time = 0;
         _elapsed_time = 0;
-        _kline->begin(_kline_baudrate, SERIAL_8O1);
+        _kline->begin(_kline_baudrate);
 
-        if (handleRequest(start_com, LEN(start_com)) == true)
-        {
-            if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-            {
-                _debug->println(F("ECU connected"));
-            }
-            _connection_time = millis();
-            _ECU_status = true;
-            _ECU_error = 0;
-            configureKline();
-        }
-        else
+        if (!handleRequest(start_com, LEN(start_com), true))
         {
             if (_debug_level >= DEBUG_LEVEL_DEFAULT)
             {
                 _debug->println(F("Initialization failed"));
             }
             _ECU_status = false;
-            ISO_T_IDLE = 0;
+            //ISO_T_IDLE = 0;
             setError(EE_START);
             return -2;
         }
 
-        if (_debug_level == DEBUG_LEVEL_VERBOSE)
-        {
-            _debug->print(F("Reading timing limits"));
-        }
-        if (handleRequest(atp_read_limits, LEN(atp_read_limits)) == true)
-        {
-            accessTimingParameter(true);
-        }
-        else
-        {
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
-            {
-                _debug->println(F("Error reading limits ATP"));
-            }
-        }
+        configureKline();
 
-        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+#if defined(KAWASAKI)
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
         {
-            _debug->print(F("Reading current timing paramenters"));
+            _debug->println(F("First handshake ok, now starting diagnostic session"));
         }
-
-        if (handleRequest(atp_read_current, LEN(atp_read_current)) == true)
+        if (!handleRequest(start_diagnostic, LEN(start_diagnostic)))
         {
-            accessTimingParameter(false);
-            return 1; // end of the init sequence
-        }
-        else
-        {
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
+            if (_debug_level >= DEBUG_LEVEL_DEFAULT)
             {
-                _debug->println(F("Error reading current ATP"));
+                _debug->println(F("Failed to start diagnostic"));
             }
-            setError(EE_ATP);
-            return -3;
+            _ECU_status = false;
+            //ISO_T_IDLE = 0;
+            setError(EE_START);
+            return -2;
         }
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+        {
+            _debug->println(F("Start diagnostic successful"));
+        }
+#endif
+
+        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+        {
+            _debug->println(F("ECU connected"));
+        }
+        _connection_time = millis();
+        _ECU_status = true;
+        _ECU_error = 0;
+        return 1;
+        break;
+    default:
+        break;
     }
-    //the program should never arrive here
-    setError(EE_UNEX);
-    return -9;
+
+    return 0;
 }
 
 /**
  * @brief Close the communication with the motorbike
- * 
+ *
  * @return `0` until the connection is not closed, then `true` if there aren't any errors, a `negative number` otherwise
  */
 int8_t KWP2000::stopKline()
@@ -491,11 +473,26 @@ void KWP2000::requestSensorsData()
 
 #elif defined(KAWASAKI)
 
-    for (uint8_t sensor = 0; sensor < LEN(request_sens[0]); sensor++)
-    {
-        handleRequest(request_sens[sensor], LEN(request_sens[sensor]));
-        //todo increase addres of _response
-    }
+    handleRequest(request_gps, LEN(request_gps));
+    _GPS = _response[PID_GPS];
+
+    handleRequest(request_rpm, LEN(request_rpm));
+    _RPM = ((_response[PID_RPM_H] * 255 + _response[PID_RPM_L]) / 255.0) * 100;
+
+    handleRequest(request_speed, LEN(request_speed));
+    _SPEED = _response[PID_SPEED];
+
+    handleRequest(request_tps, LEN(request_tps));
+    _TPS = _response[PID_TPS];
+
+    handleRequest(request_iap, LEN(request_iap));
+    _IAP = _response[PID_IAP] * 4 * 0.136;
+
+    handleRequest(request_iat, LEN(request_iat));
+    _IAT = (_response[PID_IAT] - 48) / 1.6;
+
+    handleRequest(request_ect, LEN(request_ect));
+    _ECT = (_response[PID_ECT] - 48) / 1.6;
 
 #elif defined(YAMAHA)
 
@@ -507,17 +504,12 @@ void KWP2000::requestSensorsData()
 
 #endif
 
-#ifdef FAHRENHEIT // convert the temperature values to fahrenheit
-    _IAT = TO_FAHRENHEIT(_IAT);
-    _ECT = TO_FAHRENHEIT(_ECT);
-#endif
-
     _last_sensors_calculated = millis();
 }
 
 /**
  * @brief Read the Diagnostic Trouble Codes (DTC) from the ECU
- * 
+ *
  * @param which Optional, default to `READ_ONLY_ACTIVE`. One of the values from the `trouble_codes` enum
  */
 void KWP2000::readTroubleCodes(const uint8_t which)
@@ -551,7 +543,7 @@ void KWP2000::readTroubleCodes(const uint8_t which)
 
 /**
  * @brief Clear the DTC from the ECU
- * 
+ *
  * @param code Optional. Only the passed `code` will be cleared
  */
 void KWP2000::clearTroubleCodes(const uint8_t code)
@@ -569,7 +561,7 @@ void KWP2000::clearTroubleCodes(const uint8_t code)
 
 /**
  * @brief Keep the connection through the K-Line alive
- * 
+ *
  * @param time Optional. It is calculated automatically to be a safe interval
  */
 void KWP2000::keepAlive(uint16_t time)
@@ -643,7 +635,7 @@ void KWP2000::keepAlive(uint16_t time)
 #if defined(SUZUKI)
     handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
 #elif defined(KAWASAKI)
-    handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
+    handleRequest(request_gps, LEN(request_gps));
 #elif defined(YAMAYA)
     handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
 #elif defined(HONDA)
@@ -653,13 +645,13 @@ void KWP2000::keepAlive(uint16_t time)
 
 ////////////// COMMUNICATION - Advanced ////////////////
 /**
- * @brief This function is the core of the library. You just need to give a PID and it will generate the header, calculate the checksum and try to send the request. 
+ * @brief This function is the core of the library. You just need to give a PID and it will generate the header, calculate the checksum and try to send the request.
  *          Then it will check if the response is correct and if now it will try to send the request another two times, all is based on the ISO14230
- * 
+ *
  * @param to_send The PID you want to send, see PID.h for more detail
  * @param send_len The lenght of the PID (use `sizeof` to get it)
  * @param try_once Optional, default to `false`. Choose if you want to try to send the request 3 times in case of error
- * @return `true` if the request has been sent and a correct response has been received, a `negative number` otherwise
+ * @return `true` if the request has been sent and a correct response has been received, `false` otherwise
  */
 int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len, const uint8_t try_once)
 {
@@ -685,7 +677,7 @@ int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len, c
         }
         else
         {
-            if (_debug_level == DEBUG_LEVEL_VERBOSE)
+            if (_debug_level == DEBUG_LEVEL_VERBOSE && try_once == false)
             {
                 _debug->print(F("Attempt "));
                 _debug->print(attempt);
@@ -704,22 +696,60 @@ int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len, c
     else
     {
         // we made more than 3 attemps so there is a problem
-        return -1;
+        return false;
+    }
+}
+
+void KWP2000::checkTimingParameter()
+{
+    if (_debug_level == DEBUG_LEVEL_VERBOSE)
+    {
+        _debug->print(F("Reading timing limits"));
+    }
+    if (handleRequest(atp_read_limits, LEN(atp_read_limits)) == true)
+    {
+        accessTimingParameter(true);
+    }
+    else
+    {
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("Error reading timing limits"));
+        }
+        setError(EE_ATP);
+    }
+
+    if (_debug_level == DEBUG_LEVEL_VERBOSE)
+    {
+        _debug->print(F("Reading current timing paramenters"));
+    }
+    if (handleRequest(atp_read_current, LEN(atp_read_current)) == true)
+    {
+        accessTimingParameter(false);
+    }
+    else
+    {
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("Error reading current timing paramenters"));
+        }
+        setError(EE_ATP);
     }
 }
 
 /**
  * @brief Ask and print the Timing Parameters from the ECU
- * 
+ *
  * @param read_only Optional, default to `true`. This avoid the possibility to unintentionally change them
  */
 void KWP2000::accessTimingParameter(const uint8_t read_only)
 {
     uint8_t p2_min_temp = _response[_response_data_start + 2];
+    uint32_t p2_max_temp = _response[_response_data_start + 3];
     uint16_t p3_min_temp = _response[_response_data_start + 4];
+    uint32_t p3_max_temp = _response[_response_data_start + 5];
     uint16_t p4_min_temp = _response[_response_data_start + 6];
 
-    uint32_t p2_max_temp = _response[_response_data_start + 3];
     if (p2_max_temp <= 0xF0)
     {
         p2_max_temp *= 25;
@@ -734,7 +764,6 @@ void KWP2000::accessTimingParameter(const uint8_t read_only)
         setError(EE_ATP);
     }
 
-    uint32_t p3_max_temp = _response[_response_data_start + 5];
     if (p3_max_temp <= 0xF0)
     {
         p3_max_temp *= 25;
@@ -814,7 +843,7 @@ void KWP2000::resetTimingParameter()
 
 /**
  * @brief Change the Timing Parameters to custom ones
- * 
+ *
  * @param new_atp Array of 5 elements containing the new parameters
  * @param new_atp_len The lenght of the array (use `sizeof` to get it)
  */
@@ -943,7 +972,7 @@ void KWP2000::changeTimingParameter(uint32_t new_atp[], const uint8_t new_atp_le
 
 /**
  * @brief Print a rich and useful set of information about the ECU status and errors
- * 
+ *
  * @param time Optional, default to `2000`milliseconds. The time between one print and the other
  */
 void KWP2000::printStatus(uint16_t time)
@@ -1141,7 +1170,7 @@ void KWP2000::printLastResponse()
 
 /**
  * @brief Get the connection status
- * 
+ *
  * @return It could be `true` or `false`
  */
 int8_t KWP2000::getStatus()
@@ -1151,7 +1180,7 @@ int8_t KWP2000::getStatus()
 
 /**
  * @brief This say you only if there are/aren't errors, to see them use `printStatus()`
- * 
+ *
  * @return It could be `true` or `false`
  */
 int8_t KWP2000::getError()
@@ -1198,6 +1227,10 @@ uint8_t KWP2000::getRPM()
 
 uint8_t KWP2000::getSPEED()
 {
+    if (_use_metric_system == false)
+    {
+        _SPEED = TO_MPH(_SPEED);
+    }
     return _SPEED;
 }
 
@@ -1213,11 +1246,19 @@ uint8_t KWP2000::getIAP()
 
 uint8_t KWP2000::getIAT()
 {
+    if (_use_metric_system == false)
+    {
+        _IAT = TO_FAHRENHEIT(_IAT);
+    }
     return _IAT;
 }
 
 uint8_t KWP2000::getECT()
 {
+    if (_use_metric_system == false)
+    {
+        _ECT = TO_FAHRENHEIT(_ECT);
+    }
     return _ECT;
 }
 
@@ -1230,10 +1271,10 @@ uint8_t KWP2000::getSTPS()
 
 /**
  * @brief Generate and send a request to the ECU
- * 
+ *
  * @param pid The PID you want to send
- * @param pid_len the lenght of the PID, get it with `sizeof()` 
- * @param wait_to_send_all Choose to wait untill the tx buffer is empty
+ * @param pid_len the lenght of the PID, get it with `sizeof()`
+ * @param wait_to_send_all Choose to wait until the tx buffer is empty
  * @param use_delay Choose to wait at the end of the function or to do other tasks
  */
 void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint8_t wait_to_send_all, const uint8_t use_delay)
@@ -1243,9 +1284,9 @@ void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint
 
     // create the request
     // make the header
-    if (_use_lenght_byte == true)
+    if (_use_length_byte == true)
     {
-        //we use the lenth byte
+        //we use the length byte
         _request[0] = format_physical;
         _request[3] = pid_len;
         header_len += 1;
@@ -1254,7 +1295,7 @@ void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint
     {
         if (pid_len >= 64)
         {
-            // we are forcet to use the lenght byte
+            // we are forced to use the lenght byte
             _request[0] = format_physical;
             _request[3] = pid_len;
             header_len += 1;
@@ -1333,7 +1374,7 @@ void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint
 
 /**
  * @brief Listen and process the response from the ECU
- * 
+ *
  * @param use_delay Choose to wait at the end of the function or to do other tasks
  */
 void KWP2000::listenResponse(const uint8_t use_delay)
@@ -1415,10 +1456,10 @@ void KWP2000::listenResponse(const uint8_t use_delay)
                 }
 
                 // let's see if there are lenght bits
-                if (_use_lenght_byte == true || _use_lenght_byte == maybe)
+                if (_use_length_byte == true || _use_length_byte == maybe)
                 {
                     masked = incoming & 0x3F; // 0b00111111
-                    if (masked != 0)          // the response lengh is inside the formatter
+                    if (masked != 0)          // the response length is inside the formatter
                     {
                         data_to_rcv = masked;
                         if (_debug_level == DEBUG_LEVEL_VERBOSE)
@@ -1428,9 +1469,9 @@ void KWP2000::listenResponse(const uint8_t use_delay)
                             _debug->print(F(" data bytes coming"));
                         }
 
-                        if (_use_lenght_byte == maybe)
+                        if (_use_length_byte == maybe)
                         {
-                            _use_lenght_byte = false;
+                            _use_length_byte = false;
                             setError(EE_TEST);
                         }
                     }
@@ -1554,7 +1595,7 @@ void KWP2000::listenResponse(const uint8_t use_delay)
                     data_to_rcv = incoming;
                     if (_debug_level == DEBUG_LEVEL_VERBOSE)
                     {
-                        _debug->print(F("\t- data bytes coming in HEX"));
+                        _debug->print(F("\t- data bytes coming (HEX)"));
                     }
                 }
                 else // data or checksum
@@ -1614,7 +1655,7 @@ void KWP2000::listenResponse(const uint8_t use_delay)
 
 /**
  * @brief Compare the given response to the correct one which should be received
- * 
+ *
  * @param request_sent The request sent to the ECU
  * @return `true` if the response is correct, a `negative number` if is not
  */
@@ -1692,25 +1733,25 @@ int8_t KWP2000::checkResponse(const uint8_t request_sent[])
             return -6;
             /*
             todo
-            23 routineNotComplete 
-            31 requestOutOfRange 
-            33 securityAccessDenied 
-            35 invalidKey 
-            36 exceedNumberOfAttempts 
-            37 requiredTimeDelayNotExpired 
-            40 downloadNotAccepted 
-            41 improperDownloadType 
-            42 can 'tDownloadToSpecifiedAddress                
+            23 routineNotComplete
+            31 requestOutOfRange
+            33 securityAccessDenied
+            35 invalidKey
+            36 exceedNumberOfAttempts
+            37 requiredTimeDelayNotExpired
+            40 downloadNotAccepted
+            41 improperDownloadType
+            42 can 'tDownloadToSpecifiedAddress
             43 can' tDownloadNumberOfBytesRequested
             50 uploadNotAccepted
-            51 improperUploadType 
-            52 can 'tUploadFromSpecifiedAddress                 
-            53 can' tUploadNumberOfBytesRequested 
-            71 transferSuspended 
-            72 transferAborted 
-            74 illegalAddressInBlockTransfer 
-            75 illegalByteCountInBlockTransfer 
-            76 illegalBlockTransferType 
+            51 improperUploadType
+            52 can 'tUploadFromSpecifiedAddress
+            53 can' tUploadNumberOfBytesRequested
+            71 transferSuspended
+            72 transferAborted
+            74 illegalAddressInBlockTransfer
+            75 illegalByteCountInBlockTransfer
+            76 illegalBlockTransferType
             77 blockTransferDataChecksumError
             */
         case 0x78:
@@ -1768,7 +1809,7 @@ int8_t KWP2000::checkResponse(const uint8_t request_sent[])
 
 /**
  * @brief Set errors from `error_enum`
- * 
+ *
  * @param error The error you want to set
  */
 void KWP2000::setError(const uint8_t error)
@@ -1778,7 +1819,7 @@ void KWP2000::setError(const uint8_t error)
 
 /**
  * @brief Clear errors from `error_enum`
- * 
+ *
  * @param error The error you want to clear
  */
 void KWP2000::clearError(const uint8_t error)
@@ -1787,7 +1828,7 @@ void KWP2000::clearError(const uint8_t error)
 }
 
 /**
- * @brief Configure the K-Line behaviour from the keybytes received by the ECU 
+ * @brief Configure the K-Line behaviour from the keybytes received by the ECU
  */
 void KWP2000::configureKline()
 {
@@ -1805,17 +1846,17 @@ void KWP2000::configureKline()
     if (AL1 == 1 && AL0 == 1)
     {
         // both are possible, so choose the faster one
-        _use_lenght_byte = false;
+        _use_length_byte = false;
     }
     else if (AL1 == 1 && AL0 == 0)
     {
         // lenght byte must be present
-        _use_lenght_byte = true;
+        _use_length_byte = true;
     }
     else if (AL1 == 0 && AL0 == 1)
     {
         // lenght byte not needed
-        _use_lenght_byte = false;
+        _use_length_byte = false;
     }
 
     // target and source
@@ -1858,7 +1899,7 @@ void KWP2000::configureKline()
     if (AL0 == 0 && AL1 == 0 && HB0 == 0 && HB1 == 0 && TP0 == 1 && TP1 == 0)
     {
         // it will use the same configuration as in the first response
-        _use_lenght_byte = maybe;
+        _use_length_byte = maybe;
         _use_target_source_address = maybe;
         _timing_parameter = maybe;
     }
@@ -1894,7 +1935,7 @@ void KWP2000::configureKline()
         _debug->print("Errors:\t\t\t\t");
         _debug->println(bitRead(_ECU_error, EE_CONFIG) == 1 ? "Yes" : "No");
         _debug->print("Lenght byte:\t\t");
-        _debug->println(_use_lenght_byte == 1 ? "Yes" : "No");
+        _debug->println(_use_length_byte == 1 ? "Yes" : "No");
         _debug->print("Addresses bytes:\t");
         _debug->println(_use_target_source_address == 1 ? "Yes" : "No");
         _debug->print("Timing parameter:\t");
@@ -1904,7 +1945,7 @@ void KWP2000::configureKline()
 
 /**
  * @brief The checksum is the sum of all data bytes modulo (&) 0xFF (same as being truncated to one byte)
- * 
+ *
  * @param data All the bytes received
  * @param data_len The lenght of the response
  * @return The correct checksum
@@ -1921,7 +1962,7 @@ uint8_t KWP2000::calc_checksum(const uint8_t data[], const uint8_t data_len)
 
 /**
  * @brief This is called when the last byte is received from the ECU
- * 
+ *
  * @param received_checksum The last byte received which is the checksum
  */
 void KWP2000::endResponse(const uint8_t received_checksum)

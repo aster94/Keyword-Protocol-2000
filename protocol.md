@@ -12,7 +12,7 @@ Unfortunately before the born of [International Organization for Standardization
 ![Alt text](/extras/Images/obd2_connector.png?raw=true "obd2_connector")
 
 
-# Comunication
+# Communication
 Before we begin this is the structure of the packets we would send/receive from the ECU
 
 ![Alt text](/extras/Images/structure.png?raw=true "structure")
@@ -23,7 +23,7 @@ Also the timing between bytes, requests, responses is crucial
 ![Alt text](/extras/Images/timing.png?raw=true "timing")
 
 
-## 1 - Inizialize
+## 1 - Initialize
 Finally we can start the connection
 
 ![Alt text](/extras/Images/fast_init.png?raw=true "fast init")
@@ -41,5 +41,5 @@ Then, for stronger safety, we will ask to the ECU its limits about timing
 ![Alt text](/extras/Images/timing_parameter.png?raw=true "timing parameter")
 
 
-## 4 - Enojoy
+## 4 - Enjoy
 Now we can ask for sensors data, see error codes, upload/download from the ECU, and so on

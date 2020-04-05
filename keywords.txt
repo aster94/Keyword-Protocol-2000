@@ -17,6 +17,8 @@ setDebugLevel	KEYWORD2
 disableDebug	KEYWORD2
 enableDealerMode	KEYWORD2
 dealerMode	KEYWORD2
+use_imperial	KEYWORD2
+use_metric	KEYWORD2
 
 initKline	KEYWORD2
 stopKline	KEYWORD2
@@ -26,6 +28,7 @@ clearTroubleCodes	KEYWORD2
 keepAlive	KEYWORD2
 
 handleRequest	KEYWORD2
+checkTimingParameter	KEYWORD2
 accessTimingParameter	KEYWORD2
 resetTimingParameter	KEYWORD2
 changeTimingParameter	KEYWORD2

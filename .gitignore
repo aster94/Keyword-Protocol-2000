@@ -1,6 +1,7 @@
-.pioenvs/**
-.vscode/**
-/doxygen
-/extras/Resources/**
+lib/**
+.pio/**
 /test/**
-platformio.ini
+include/**
+.vscode/**
+doxygen/**
+.travis.yml

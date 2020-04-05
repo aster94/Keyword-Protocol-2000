@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "KWP2000.h"
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -5,10 +6,13 @@ HardwareSerial bike(2); // for the ESP32 core
 #elif defined(ARDUINO_ARCH_STM32)
 HardwareSerial bike(PA3, PA2); // for the stm32duino core
 #else
-#define bike Serial2 // for the Arduino avr core
+#define bike Serial3 // for the Arduino avr core
 #endif
 
-KWP2000 ECU(&bike, 13, 115200);
+#define debug Serial
+#define TX_PIN 14
+
+KWP2000 ECU(&bike, TX_PIN);
 
 uint8_t dealer_status = false;
 char in;
@@ -16,28 +20,28 @@ uint8_t fake_request[] = {1, 2};
 
 void setup()
 {
-    ECU.enableDebug(&Serial, DEBUG_LEVEL_VERBOSE, 115200);
+    ECU.enableDebug(&debug, DEBUG_LEVEL_VERBOSE, 115200);
     //Serial.begin(); this is not needed because we use then same serial as the debug
-    ECU.enableDealerMode(8);
+    //ECU.enableDealerMode(8);
 
-    while (!Serial)
+    while (!debug)
     {
         // wait for connection with the serial
     }
-    while (Serial.available() > 0)
+    while (debug.available() > 0)
     {
-        Serial.read(); // empty serial buffer
+        debug.read(); // empty serial buffer
     }
 }
 
 void loop()
 {
-    ECU.printStatus();
-    if (Serial.available() > 0)
+    //ECU.printStatus();
+    if (debug.available() > 0)
     {
-        in = Serial.read();
-        Serial.print("User Input: ");
-        Serial.println(in);
+        in = debug.read();
+        debug.print("User Input: ");
+        debug.println(in);
 
         switch (in)
         {
