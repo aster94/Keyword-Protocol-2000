@@ -19,37 +19,28 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#include "Arduino.h"
+#ifndef KWP2000_cpp
+#define KWP2000_cpp
+
+#include <Arduino.h>
+
 #include "KWP2000.h"
-#include "PIDs.h"
+#include "ISO.h"
+
+#warning "Not ready for Yamaha and Honda, before using this open an issue on github"
 
 #define maybe 2 ///< used when we don't know yet the behaviour of the K-Line
 
 #define TO_FAHRENHEIT(x) x * 1.8 + 32                                                   ///< the formula for the conversion from celsius to fahrenheit
 #define TO_MPH(x) x / 1.609                                                             ///< the formula for the conversion from km/h to mp/h
-#define LEN(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x]))))) ///< complex but safe macro for the lenght
-
-// These values are defined by the ISO protocol
-#define ISO_MAX_DATA 260 ///< maximum length of a response from the ecu: 255 data + 4 header + 1 checksum
-
-#define ISO_T_P1 10 ///< inter byte time for ECU response - min: 0 max: 20
-#define ISO_T_P2_MIN_LIMIT 50
-#define ISO_T_P2_MAX_LIMIT 89600 ///< P2 time between tester request and ECU response or two ECU responses
-#define ISO_T_P3_MAX_LIMIT 89600 ///< P3 time between end of ECU responses and start of new tester request
-#define ISO_T_P4_MAX_LIMIT 20    ///< inter byte time for tester request
-// P2 (min & max), P3 (min & max) and P4 (min) are defined by the ECU with accessTimingParameter()
-
-// Initialization
-#define ISO_T_IDLE 1000             ///< min 300, max undefined
-#define ISO_T_INIL (unsigned int)25 ///< Initialization low time
-#define ISO_T_WUP (unsigned int)50  ///< Wake up Pattern
+#define LEN(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x]))))) ///< complex but safe macro for the length
 
 /**
- * @brief This is a a collection of  possible ECU Errors
+ * @brief This is a a collection of possible ECU Errors
  */
 enum error_enum
 {
-    EE_TEST,   ///< for various test
+    EE_TEST,   ///< for test purposes
     EE_START,  ///< unable to start comunication
     EE_STOP,   ///< unable to stop comunication
     EE_TO,     ///< data is not for us
@@ -57,9 +48,9 @@ enum error_enum
     EE_CS,     ///< checksum error
     EE_ECHO,   ///< echo error
     EE_UNEX,   ///< unexpected error
-    EE_HEADER, ///< strange header
+    EE_HEADER, ///< header not regular
     EE_USER,   ///< error due to wrong call of a function
-    EE_CONFIG, ///< strange config value in the key bytes
+    EE_CONFIG, ///< key bytes not regular
     EE_P3MAX,  ///< time out communication
     EE_CR,     ///< check response error
     EE_ATP,    ///< problem setting/reading the timing parameter
@@ -75,13 +66,18 @@ enum error_enum
  *
  * @param kline_serial The Serial port you will use to communicate with the ECU
  * @param k_out_pin The TX pin of this serial
- * @param kline_baudrate Optional, defaut to `10400`. The baudrate for the kline,
+ * @param brand the brand of your bike: `SUZUKI`, `KAWASAKI`, `YAMAHA` or `HONDA`
+ * @param model The model of the bike
  */
-KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const uint32_t kline_baudrate)
+KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const brand brand, const model model)
 {
     _kline = kline_serial;
-    _kline_baudrate = kline_baudrate;
     _k_out_pin = k_out_pin;
+    _brand = brand;
+    _model = model;
+    set_bike_specific_values(_brand, _model);
+
+    _response = new uint8_t[ISO_MAX_DATA];
 }
 
 ////////////// SETUP ////////////////
@@ -90,14 +86,14 @@ KWP2000::KWP2000(HardwareSerial *kline_serial, const uint8_t k_out_pin, const ui
  * @brief Enable the debug of the communication
  *
  * @param debug_serial The Serial port you will use for the debug information
- * @param debug_level Optional, default to `DEBUG_LEVEL_DEFAULT`. The verbosity of the debug
- * @param debug_baudrate Optional, default to `115200`. The baudrate for the debug
+ * @param debug_level The verbosity of the debug, default to `DEBUG_LEVEL_DEFAULT`
+ * @param debug_baudrate The baudrate for the debug, default to `115200`
  */
 void KWP2000::enableDebug(HardwareSerial *debug_serial, const uint8_t debug_level, const uint32_t debug_baudrate)
 {
     _debug = debug_serial;
-    _debug->begin(debug_baudrate);
     _debug_level = debug_level;
+    _debug->begin(debug_baudrate);
     _debug_enabled = true;
 
     if (_debug_level >= DEBUG_LEVEL_DEFAULT)
@@ -149,6 +145,11 @@ void KWP2000::disableDebug()
  */
 void KWP2000::enableDealerMode(const uint8_t dealer_pin)
 {
+    if (_brand != SUZUKI)
+    {
+        return;
+    }
+    _dealer_enabled = true;
     _dealer_pin = dealer_pin;
     pinMode(_dealer_pin, OUTPUT);
     digitalWrite(_dealer_pin, LOW);
@@ -159,8 +160,12 @@ void KWP2000::enableDealerMode(const uint8_t dealer_pin)
  *
  * @param dealer_mode Choose between true/false
  */
-void KWP2000::dealerMode(const uint8_t dealer_mode)
+void KWP2000::setDealerMode(const uint8_t dealer_mode)
 {
+    if (_dealer_enabled == false)
+    {
+        return;
+    }
     _dealer_mode = dealer_mode;
     digitalWrite(_dealer_pin, _dealer_mode);
     if (_debug_level >= DEBUG_LEVEL_DEFAULT)
@@ -170,10 +175,32 @@ void KWP2000::dealerMode(const uint8_t dealer_mode)
     }
 }
 
+/**
+ * @brief Only for Suzuki: Check the dealer status
+ *
+ * @return true if it is in dealer mode
+ * @return false otherwise
+ */
+bool KWP2000::getDealerMode()
+{
+    if (_dealer_enabled == false)
+    {
+        return false;
+    }
+    return digitalRead(_dealer_pin);
+}
+
+/**
+ * @brief Choose to use imperial system for the sensors values (mp/h, Fahrenheit)
+ */
 void KWP2000::use_imperial()
 {
     _use_metric_system = false;
 }
+
+/**
+ * @brief Choose to use metric system for the sensors values (km/h, Celsius)
+ */
 void KWP2000::use_metric()
 {
     _use_metric_system = true;
@@ -182,9 +209,9 @@ void KWP2000::use_metric()
 ////////////// COMMUNICATION - Basic ////////////////
 
 /**
- * @brief Inizialize the the communication through the K-Line
+ * @brief Initialize the the communication through the K-Line
  *
- * @return int8_t `0` until the connection is not established, then `true` if there aren't any errors, a `negative number` otherwise
+ * @return `false` until the connection is not established; `true` if we connected; a `negative number` otherwise
  */
 int8_t KWP2000::initKline()
 {
@@ -225,7 +252,15 @@ int8_t KWP2000::initKline()
         */
 
         _use_length_byte = false;
-        _use_target_source_address = true;
+        if (_brand == SUZUKI || _brand == KAWASAKI)
+        {
+            _use_target_source_address = true;
+        }
+        else if (_brand == YAMAHA || _brand == HONDA)
+        {
+            _use_target_source_address = false;
+        }
+
         _kline->end();
 
         digitalWrite(_k_out_pin, HIGH);
@@ -273,7 +308,7 @@ int8_t KWP2000::initKline()
         _init_sequence_started = false;
         _start_time = 0;
         _elapsed_time = 0;
-        _kline->begin(_kline_baudrate);
+        _kline->begin(ISO_BAUDRATE);
 
         if (!handleRequest(start_com, LEN(start_com), true))
         {
@@ -287,29 +322,30 @@ int8_t KWP2000::initKline()
             return -2;
         }
 
-        configureKline();
+        configureKline(); // maybe honda e yamaha shouldn't run this
 
-#if defined(KAWASAKI)
-        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-        {
-            _debug->println(F("First handshake ok, now starting diagnostic session"));
-        }
-        if (!handleRequest(start_diagnostic, LEN(start_diagnostic)))
+        if (_brand == KAWASAKI)
         {
             if (_debug_level >= DEBUG_LEVEL_DEFAULT)
             {
-                _debug->println(F("Failed to start diagnostic"));
+                _debug->println(F("First handshake ok, now starting diagnostic session"));
             }
-            _ECU_status = false;
-            //ISO_T_IDLE = 0;
-            setError(EE_START);
-            return -2;
+            if (!handleRequest(start_diagnostic, LEN(start_diagnostic)))
+            {
+                if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+                {
+                    _debug->println(F("Failed to start diagnostic"));
+                }
+                _ECU_status = false;
+                //ISO_T_IDLE = 0;
+                setError(EE_START);
+                return -2;
+            }
+            if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+            {
+                _debug->println(F("Start diagnostic successful"));
+            }
         }
-        if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-        {
-            _debug->println(F("Start diagnostic successful"));
-        }
-#endif
 
         if (_debug_level >= DEBUG_LEVEL_DEFAULT)
         {
@@ -330,7 +366,7 @@ int8_t KWP2000::initKline()
 /**
  * @brief Close the communication with the motorbike
  *
- * @return `0` until the connection is not closed, then `true` if there aren't any errors, a `negative number` otherwise
+ * @return `false` until the connection is not closed; `true` if there aren't any errors, a `negative number` otherwise
  */
 int8_t KWP2000::stopKline()
 {
@@ -405,7 +441,7 @@ int8_t KWP2000::stopKline()
 }
 
 /**
- * @brief Send a request to the ECU asking for data from all the sensors, to see them you can use `printSensorsData()`
+ * @brief Send a request to the ECU asking for data from all the sensors, then you can access the single sensor with the `get*()` functions or you can see all of them with the `printSensorsData()`
  */
 void KWP2000::requestSensorsData()
 {
@@ -424,85 +460,70 @@ void KWP2000::requestSensorsData()
         _debug->println(F("Requesting Sensors Data"));
     }
 
-#if defined(SUZUKI)
+    if (_brand == SUZUKI)
+    {
+        handleRequest(suzuki_request_sens, LEN(suzuki_request_sens));
+        //GPS (Gear Position Sensor)
+        _GPS = _response[IDX_GPS];
 
-    handleRequest(request_sens, LEN(request_sens));
-    //GPS (Gear Position Sensor)
-    _GEAR1 = _response[PID_GPS];
-    _GEAR2 = _response[PID_CLUTCH];
-    _GEAR3 = _response[PID_GEAR_3];
-    _GPS = 0;
+        // Clutch
+        _CLUTCH = _response[IDX_CLUTCH];
 
-    //RPM (Rights Per Minutes) it is split between two byte
-    _RPM = _response[PID_RPM_H] * 10 + _response[PID_RPM_L] / 10;
+        //RPM (Rights Per Minutes) it is split between two byte
+        _RPM = _response[IDX_RPM_H] * 10 + _response[IDX_RPM_L] / 10;
 
-    //Speed
-    _SPEED = _response[PID_SPEED] * 2;
+        // Speed
+        _SPEED = _response[IDX_SPEED] * 2;
 
-    //TPS (Throttle Position Sensor)
-    _TPS = 125 * (_response[PID_TPS] - 55) / (256 - 55);
+        // TPS (Throttle Position Sensor)
+        _TPS = 125 * (_response[IDX_TPS] - 55) / (256 - 55);
 
-    //IAP (Intake Air Pressure)
-    _IAP = _response[PID_IAP] * 4 * 0.136;
+        // STPS (Secondary Throttle Position Sensor)
+        _STPS = _response[IDX_STPS] / 2.55;
 
-    //IAT (Intake Air Temperature)
-    _IAT = (_response[PID_IAT] - 48) / 1.6;
+        // IAP (Intake Air Pressure)
+        _IAP = _response[IDX_IAP] * 4 * 0.136;
 
-    //ECT (Engine Coolant Temperature)
-    _ECT = (_response[PID_ECT] - 48) / 1.6;
+        // IAT (Intake Air Temperature)
+        _IAT = (_response[IDX_IAT] - 48) / 1.6;
 
-    //STPS (Secondary Throttle Position Sensor)
-    _STPS = _response[PID_STPS] / 2.55;
+        // ECT (Engine Coolant Temperature)
+        _ECT = (_response[IDX_ECT] - 48) / 1.6;
 
-    /*
-    other sensors
+        // Voltage
+        _VOLT = _response[IDX_VOLT] * 100 / 126;
+    }
+    else if (_brand == KAWASAKI)
+    {
+        handleRequest(kawasaki_request_gps, LEN(kawasaki_request_gps));
+        _GPS = _response[IDX_GPS];
 
-    //voltage?
-    voltage = _response[32] * 100 / 126;
+        handleRequest(kawasaki_request_rpm, LEN(kawasaki_request_rpm));
+        _RPM = ((_response[IDX_RPM_H] * 255 + _response[IDX_RPM_L]) / 255.0) * 100;
 
-    //FUEL 40-46
+        handleRequest(kawasaki_request_speed, LEN(kawasaki_request_speed));
+        _SPEED = _response[IDX_SPEED];
 
-    //IGN 49-52
+        handleRequest(kawasaki_request_tps, LEN(kawasaki_request_tps));
+        _TPS = _response[IDX_TPS];
 
-    //STVA
-    STVA = _response[54] * 100 / 255;
+        handleRequest(kawasaki_request_iap, LEN(kawasaki_request_iap));
+        _IAP = _response[IDX_IAP] * 4 * 0.136;
 
-    //pair
-    PAIR = _response[59];
-    */
+        handleRequest(kawasaki_request_iat, LEN(kawasaki_request_iat));
+        _IAT = (_response[IDX_IAT] - 48) / 1.6;
 
-#elif defined(KAWASAKI)
-
-    handleRequest(request_gps, LEN(request_gps));
-    _GPS = _response[PID_GPS];
-
-    handleRequest(request_rpm, LEN(request_rpm));
-    _RPM = ((_response[PID_RPM_H] * 255 + _response[PID_RPM_L]) / 255.0) * 100;
-
-    handleRequest(request_speed, LEN(request_speed));
-    _SPEED = _response[PID_SPEED];
-
-    handleRequest(request_tps, LEN(request_tps));
-    _TPS = _response[PID_TPS];
-
-    handleRequest(request_iap, LEN(request_iap));
-    _IAP = _response[PID_IAP] * 4 * 0.136;
-
-    handleRequest(request_iat, LEN(request_iat));
-    _IAT = (_response[PID_IAT] - 48) / 1.6;
-
-    handleRequest(request_ect, LEN(request_ect));
-    _ECT = (_response[PID_ECT] - 48) / 1.6;
-
-#elif defined(YAMAHA)
-
-    handleRequest(request_sens, LEN(request_sens));
-
-#elif defined(HONDA)
-
-    handleRequest(request_sens, LEN(request_sens));
-
-#endif
+        handleRequest(kawasaki_request_ect, LEN(kawasaki_request_ect));
+        _ECT = (_response[IDX_ECT] - 48) / 1.6;
+    }
+    else if (_brand == YAMAHA)
+    {
+        handleRequest(yamaha_request_sens, LEN(yamaha_request_sens));
+    }
+    else if (_brand == HONDA)
+    {
+        handleRequest(honda_request_sens, LEN(honda_request_sens));
+    }
 
     _last_sensors_calculated = millis();
 }
@@ -510,10 +531,20 @@ void KWP2000::requestSensorsData()
 /**
  * @brief Read the Diagnostic Trouble Codes (DTC) from the ECU
  *
- * @param which Optional, default to `READ_ONLY_ACTIVE`. One of the values from the `trouble_codes` enum
+ * @param Default to `READ_ONLY_ACTIVE`, accepted values `READ_TOTAL`, `READ_ALL`
  */
-void KWP2000::readTroubleCodes(const uint8_t which)
+void KWP2000::readTroubleCodes(const trouble_code which)
 {
+    if (_ECU_status == false)
+    {
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("Not connected to the ECU"));
+        }
+        setError(EE_USER);
+        return;
+    }
+
     if (which == READ_TOTAL)
     {
         handleRequest(trouble_codes_all, LEN(trouble_codes_all));
@@ -548,11 +579,21 @@ void KWP2000::readTroubleCodes(const uint8_t which)
  */
 void KWP2000::clearTroubleCodes(const uint8_t code)
 {
+    if (_ECU_status == false)
+    {
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("Not connected to the ECU"));
+        }
+        setError(EE_USER);
+        return;
+    }
+
     if (code == 0x00) // Clear all
     {
         handleRequest(clear_trouble_codes, LEN(clear_trouble_codes));
     }
-    else // clear a single error provided by the user
+    else // Clear a single error provided by the user
     {
         const uint8_t to_clear[] = {clear_trouble_codes[0], code};
         handleRequest(to_clear, LEN(to_clear));
@@ -572,7 +613,7 @@ void KWP2000::keepAlive(uint16_t time)
         uint8_t in;
         if (_debug_level == DEBUG_LEVEL_VERBOSE)
         {
-            _debug->println("Me:\nHave you said something?\nECU:");
+            _debug->println("Serial buffer not empty:");
         }
         while (_kline->available() > 0)
         {
@@ -586,12 +627,12 @@ void KWP2000::keepAlive(uint16_t time)
 
     if (_ECU_status == false)
     {
-        return; //if it is not connected it is meaningless to send a request
+        return; // If it is not connected it is meaningless to send a request
     }
 
     if (millis() - _last_correct_response >= ISO_T_P3_MAX)
     {
-        // the connection has been lost
+        // The connection has been lost
         if (_stop_sequence_started == false)
         {
             if (_debug_level == DEBUG_LEVEL_VERBOSE)
@@ -616,14 +657,14 @@ void KWP2000::keepAlive(uint16_t time)
 
     if (time > ISO_T_P3_MAX)
     {
-        // prevent human's errors
+        // Prevent human's errors
         time = _keep_iso_alive;
         setError(EE_USER);
     }
 
     if (millis() - _last_correct_response <= time)
     {
-        // not enough time has passed since last time we talked with the ECU
+        // We talked with the ECU not so much time ago
         return;
     }
 
@@ -632,15 +673,24 @@ void KWP2000::keepAlive(uint16_t time)
         _debug->print(F("\nKeeping connection alive\nLast:"));
         _debug->println(millis() - _last_correct_response);
     }
-#if defined(SUZUKI)
-    handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
-#elif defined(KAWASAKI)
-    handleRequest(request_gps, LEN(request_gps));
-#elif defined(YAMAYA)
-    handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
-#elif defined(HONDA)
-    handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
-#endif
+
+    // Send a dummy request
+    if (_brand == SUZUKI)
+    {
+        handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
+    }
+    else if (_brand == KAWASAKI)
+    {
+        handleRequest(kawasaki_request_gps, LEN(kawasaki_request_gps));
+    }
+    else if (_brand == YAMAHA)
+    {
+        handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
+    }
+    else if (_brand == HONDA)
+    {
+        handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
+    }
 }
 
 ////////////// COMMUNICATION - Advanced ////////////////
@@ -649,7 +699,7 @@ void KWP2000::keepAlive(uint16_t time)
  *          Then it will check if the response is correct and if now it will try to send the request another two times, all is based on the ISO14230
  *
  * @param to_send The PID you want to send, see PID.h for more detail
- * @param send_len The lenght of the PID (use `sizeof` to get it)
+ * @param send_len The length of the PID (use `sizeof` to get it)
  * @param try_once Optional, default to `false`. Choose if you want to try to send the request 3 times in case of error
  * @return `true` if the request has been sent and a correct response has been received, `false` otherwise
  */
@@ -695,13 +745,27 @@ int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len, c
     }
     else
     {
-        // we made more than 3 attemps so there is a problem
+        // We made more than 3 attemps so there is a problem
         return false;
     }
 }
 
+/**
+ * @brief Read the time parameter and set some library timing based on them
+ */
+/*
 void KWP2000::checkTimingParameter()
 {
+    if (_ECU_status == false)
+    {
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("Not connected to the ECU"));
+        }
+        setError(EE_USER);
+        return;
+    }
+
     if (_debug_level == DEBUG_LEVEL_VERBOSE)
     {
         _debug->print(F("Reading timing limits"));
@@ -736,12 +800,13 @@ void KWP2000::checkTimingParameter()
         setError(EE_ATP);
     }
 }
-
+*/
 /**
- * @brief Ask and print the Timing Parameters from the ECU
+ * @brief Print the Timing Parameters from the ECU
  *
  * @param read_only Optional, default to `true`. This avoid the possibility to unintentionally change them
  */
+/*
 void KWP2000::accessTimingParameter(const uint8_t read_only)
 {
     uint8_t p2_min_temp = _response[_response_data_start + 2];
@@ -814,12 +879,22 @@ void KWP2000::accessTimingParameter(const uint8_t read_only)
         _debug->println();
     }
 }
-
+*/
 /**
  * @brief Reset the Timing Parameters to the default settings from the ECU
  */
+/*
 void KWP2000::resetTimingParameter()
 {
+    if (_ECU_status == false)
+    {
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("Not connected to the ECU"));
+        }
+        setError(EE_USER);
+        return;
+    }
     if (_debug_level >= DEBUG_LEVEL_DEFAULT)
     {
         _debug->println(F("Resetting time parameters to default"));
@@ -840,15 +915,26 @@ void KWP2000::resetTimingParameter()
     }
     accessTimingParameter(true);
 }
-
+*/
 /**
  * @brief Change the Timing Parameters to custom ones
  *
  * @param new_atp Array of 5 elements containing the new parameters
- * @param new_atp_len The lenght of the array (use `sizeof` to get it)
+ * @param new_atp_len The length of the array (use `sizeof` to get it)
  */
+/*
 void KWP2000::changeTimingParameter(uint32_t new_atp[], const uint8_t new_atp_len)
 {
+    if (_ECU_status == false)
+    {
+        if (_debug_level == DEBUG_LEVEL_VERBOSE)
+        {
+            _debug->println(F("Not connected to the ECU"));
+        }
+        setError(EE_USER);
+        return;
+    }
+
     if (_debug_level >= DEBUG_LEVEL_DEFAULT)
     {
         _debug->println(F("Changing timing parameter"));
@@ -967,13 +1053,13 @@ void KWP2000::changeTimingParameter(uint32_t new_atp[], const uint8_t new_atp_le
     // check if our values has been setted correctly
     accessTimingParameter(true);
 }
-
+*/
 /////////////////// PRINT and GET ///////////////////////
 
 /**
  * @brief Print a rich and useful set of information about the ECU status and errors
  *
- * @param time Optional, default to `2000`milliseconds. The time between one print and the other
+ * @param time Optional, default to 5 seconds. The time between one print and the next one
  */
 void KWP2000::printStatus(uint16_t time)
 {
@@ -1012,15 +1098,16 @@ void KWP2000::printStatus(uint16_t time)
         }
 
         _debug->print(F("Baudrate:\t\t"));
-        _debug->println(_kline_baudrate);
-        _debug->print(F("K-line TX pin:\t"));
+        _debug->println(ISO_BAUDRATE);
+        _debug->print(F("K-line TX pin:\t\t"));
         _debug->println(_k_out_pin);
-#if defined(SUZUKI)
-        _debug->print(F("Dealer pin:\t\t"));
-        _debug->println(_dealer_pin);
-        _debug->print(F("Dealer mode:\t"));
-        _debug->println(_dealer_mode == 1 ? "Enabled" : "Disabled");
-#endif
+        if (_brand == SUZUKI)
+        {
+            _debug->print(F("Dealer pin:\t\t"));
+            _debug->println(_dealer_pin);
+            _debug->print(F("Dealer mode:\t"));
+            _debug->println(_dealer_mode == 1 ? "Enabled" : "Disabled");
+        }
         //other stuff?
         if (_ECU_error != 0)
         {
@@ -1103,7 +1190,7 @@ void KWP2000::printSensorsData()
         // we didn't run requestSensorsData
         if (_debug_level == DEBUG_LEVEL_VERBOSE)
         {
-            _debug->print(F("requestSensorsData need to be called before"));
+            _debug->print(F("requestSensorsData() needs to be called before"));
         }
         setError(EE_USER);
         return;
@@ -1113,32 +1200,28 @@ void KWP2000::printSensorsData()
     {
         _debug->print(F("---- SENSORS ----\n"));
         _debug->print(F("Calculated: "));
-        _debug->print(_last_sensors_calculated == 0 ? "Never\n"
-                                                    : String((millis() - _last_sensors_calculated) / 1000.0, 2) + " seconds ago\n");
+        _debug->print(millis() - _last_sensors_calculated);
+        _debug->println(F(" milliseconds ago"));
         _debug->print(F("GPS:\t"));
         _debug->println(_GPS);
+        _debug->print(F("CLUTCH:\t"));
+        _debug->println(_CLUTCH);
         _debug->print(F("RPM:\t"));
         _debug->println(_RPM);
         _debug->print(F("Speed:\t"));
         _debug->println(_SPEED);
         _debug->print(F("TPS:\t"));
         _debug->println(_TPS);
+        _debug->print(F("STPS:\t"));
+        _debug->println(_STPS);
         _debug->print(F("IAP:\t"));
         _debug->println(_IAP);
         _debug->print(F("IAT:\t"));
         _debug->println(_IAT);
         _debug->print(F("ECT:\t"));
         _debug->println(_ECT);
-        _debug->print(F("STPS:\t"));
-        _debug->println(_STPS);
-        //_debug->print(F(":\t"));_debug->println();
-
-        _debug->print(F("_GEAR1:\t"));
-        _debug->println(_GEAR1, BIN);
-        _debug->print(F("_GEAR2:\t"));
-        _debug->println(_GEAR2, BIN);
-        _debug->print(F("_GEAR3:\t"));
-        _debug->println(_GEAR3, BIN);
+        _debug->print(F("VOLT:\t"));
+        _debug->println(_VOLT);
 
         _debug->print(F("---- ------- ----\n"));
         _last_data_print = millis();
@@ -1179,45 +1262,27 @@ int8_t KWP2000::getStatus()
 }
 
 /**
- * @brief This say you only if there are/aren't errors, to see them use `printStatus()`
- *
- * @return It could be `true` or `false`
- */
-int8_t KWP2000::getError()
-{
-    if (_ECU_error == 0)
-    {
-        return 1;
-    }
-    else
-    {
-        return -1;
-    }
-}
-
-/**
- * @brief Reset the errors from the ECU, use with caution
- */
-void KWP2000::resetError()
-{
-    _ECU_error = 0;
-}
-
-/**
  * @brief Get* the ECU sensor value you need
  * GPS: Gear Position Sensor
- * RPM: Right Per Minutes
- * SPEED: speed of the bike
+ * CLUTCH: Know if the clutch is pressed or not
+ * RPM: Revolutions per Minutes
+ * SPEED: Speed
  * TPS: Throttle Position Sensor
- * IAP: Intake Air Pressure
+ * STPS: Secondary Throttle Position Sensor
+ * IAP: Intake Air Pressure, in kPa
  * IAT: Intake Air Temperature
  * ECT: Engine Coolant Temperature
- * STPS: Secondary Throttle Position Sensor
+ * VOLT: Battery voltage
  * @return The sensor value from the ECU
  */
 uint8_t KWP2000::getGPS()
 {
     return _GPS;
+}
+
+uint8_t KWP2000::getCLUTCH()
+{
+    return _CLUTCH;
 }
 
 uint8_t KWP2000::getRPM()
@@ -1237,6 +1302,11 @@ uint8_t KWP2000::getSPEED()
 uint8_t KWP2000::getTPS()
 {
     return _TPS;
+}
+
+uint8_t KWP2000::getSTPS()
+{
+    return _STPS;
 }
 
 uint8_t KWP2000::getIAP()
@@ -1262,9 +1332,9 @@ uint8_t KWP2000::getECT()
     return _ECT;
 }
 
-uint8_t KWP2000::getSTPS()
+float KWP2000::getVOLT()
 {
-    return _STPS;
+    return _VOLT;
 }
 
 /////////////////// PRIVATE ///////////////////////
@@ -1273,71 +1343,73 @@ uint8_t KWP2000::getSTPS()
  * @brief Generate and send a request to the ECU
  *
  * @param pid The PID you want to send
- * @param pid_len the lenght of the PID, get it with `sizeof()`
+ * @param pid_len the length of the PID, get it with `sizeof()`
  * @param wait_to_send_all Choose to wait until the tx buffer is empty
  * @param use_delay Choose to wait at the end of the function or to do other tasks
  */
 void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint8_t wait_to_send_all, const uint8_t use_delay)
 {
+    uint8_t request[20];
+    uint8_t request_len = 0;
     uint8_t echo = 0;
-    uint8_t header_len = 1; // minimun lenght
+    uint8_t header_len = 1; // minimun length
 
     // create the request
     // make the header
     if (_use_length_byte == true)
     {
         //we use the length byte
-        _request[0] = format_physical;
-        _request[3] = pid_len;
+        request[0] = format_physical;
+        request[3] = pid_len;
         header_len += 1;
     }
-    else // don't use the lenght_byte
+    else // don't use the length_byte
     {
         if (pid_len >= 64)
         {
-            // we are forced to use the lenght byte
-            _request[0] = format_physical;
-            _request[3] = pid_len;
+            // we are forced to use the length byte
+            request[0] = format_physical;
+            request[3] = pid_len;
             header_len += 1;
         }
         else
         {
-            // the lenght byte is "inside" the format
-            _request[0] = format_physical | pid_len;
+            // the length byte is "inside" the format
+            request[0] = format_physical | pid_len;
         }
     }
 
     if (_use_target_source_address == true)
     {
         // add target and source address
-        _request[1] = ECU_addr;
-        _request[2] = OUR_addr;
+        request[1] = ECU_addr;
+        request[2] = OUR_addr;
         header_len += 2;
     }
 
-    _request_len = header_len + pid_len + 1; // header + request + checksum
+    request_len = header_len + pid_len + 1; // header + request + checksum
 
     // add the PID
     for (uint8_t k = 0; k < pid_len; k++)
     {
-        _request[header_len + k] = pid[k];
+        request[header_len + k] = pid[k];
     }
 
     // checksum
-    _request[_request_len - 1] = calc_checksum(_request, _request_len - 1);
+    request[request_len - 1] = calc_checksum(request, request_len - 1);
 
     // finally we send the request
     _elapsed_time = 0;
-    for (uint8_t i = 0; i < _request_len; i++)
+    for (uint8_t i = 0; i < request_len; i++)
     {
-        _kline->write(_request[i]);
+        _kline->write(request[i]);
         if (_debug_level == DEBUG_LEVEL_VERBOSE)
         {
             if (i == 0)
             {
                 _debug->println(F("\nSending\t\tEcho"));
             }
-            _debug->println(_request[i], HEX);
+            _debug->println(request[i], HEX);
         }
 
         _start_time = millis();
@@ -1354,7 +1426,7 @@ void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint
         _elapsed_time = 0;
 
         //check if i send the correct bytes
-        if (echo != _request[i] && echo != 0)
+        if (echo != request[i] && echo != 0)
         {
             setError(EE_ECHO);
         }
@@ -1379,18 +1451,14 @@ void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint
  */
 void KWP2000::listenResponse(const uint8_t use_delay)
 {
-    // reset _response
     _response_data_start = 0;
     _response_len = 0;
-    for (uint16_t i = 0; i < ISO_MAX_DATA; i++)
-    {
-        _response[i] = 0;
-    }
+    memset(_response, 0, ISO_MAX_DATA);
 
     uint8_t masked = 0;                     // useful for bit mask operation
     uint8_t response_completed = false;     // when true no more bytes will be received
     uint32_t incoming;                      // incoming byte from the ECU
-    uint8_t n_byte = 0;                     // actual lenght of the response, updated every times a new byte is received
+    uint8_t n_byte = 0;                     // actual length of the response, updated every times a new byte is received
     uint8_t data_to_rcv = 0;                // data to receive: bytes of the response that have to be received (not received yet)
     uint8_t data_rcvd = 0;                  // data received: bytes of the response already received
     uint32_t last_data_received = millis(); // check times for the timeout
@@ -1420,7 +1488,7 @@ void KWP2000::listenResponse(const uint8_t use_delay)
 
             switch (n_byte)
             {
-            case 0: // the first byte is the formatter, with or without lenght bits
+            case 0: // the first byte is the formatter, with or without length bits
 
                 masked = incoming & 0xC0; // 0b11000000
                 if (masked == format_physical)
@@ -1455,7 +1523,7 @@ void KWP2000::listenResponse(const uint8_t use_delay)
                     setError(EE_HEADER);
                 }
 
-                // let's see if there are lenght bits
+                // let's see if there are length bits
                 if (_use_length_byte == true || _use_length_byte == maybe)
                 {
                     masked = incoming & 0x3F; // 0b00111111
@@ -1475,14 +1543,14 @@ void KWP2000::listenResponse(const uint8_t use_delay)
                             setError(EE_TEST);
                         }
                     }
-                    else // the response lenght is in a separete byte (the 2nd or the 4th)
+                    else // the response length is in a separete byte (the 2nd or the 4th)
                     {
                         data_to_rcv = 0;
                     }
                 }
                 break;
 
-            case 1: // the second byte is be the target address or the lenght byte or the data
+            case 1: // the second byte is be the target address or the length byte or the data
 
                 if (_use_target_source_address == maybe)
                 {
@@ -1519,7 +1587,7 @@ void KWP2000::listenResponse(const uint8_t use_delay)
                 }
                 else if (_use_target_source_address == false)
                 {
-                    if (data_to_rcv == 0) // it is the lenght byte
+                    if (data_to_rcv == 0) // it is the length byte
                     {
                         data_to_rcv = incoming;
                         if (_debug_level == DEBUG_LEVEL_VERBOSE)
@@ -1588,9 +1656,9 @@ void KWP2000::listenResponse(const uint8_t use_delay)
                 }
                 break;
 
-            case 3: // the fourth byte is the lenght byte or the data or checksum
+            case 3: // the fourth byte is the length byte or the data or checksum
 
-                if (data_to_rcv == 0) // it is the lenght byte
+                if (data_to_rcv == 0) // it is the length byte
                 {
                     data_to_rcv = incoming;
                     if (_debug_level == DEBUG_LEVEL_VERBOSE)
@@ -1776,7 +1844,6 @@ int8_t KWP2000::checkResponse(const uint8_t request_sent[])
             setError(EE_US);
             return -7;
             /*
-            todo
             79  incorrectByteCountDuringBlockTransfer
             80 - FF manufacturerSpecificCodes
             */
@@ -1840,7 +1907,7 @@ void KWP2000::configureKline()
 
     uint16_t key_bytes = _response[_response_data_start + 2] << 8 | _response[_response_data_start + 1];
 
-    // lenght byte
+    // length byte
     uint8_t AL0 = bitRead(key_bytes, 0);
     uint8_t AL1 = bitRead(key_bytes, 1);
     if (AL1 == 1 && AL0 == 1)
@@ -1850,12 +1917,12 @@ void KWP2000::configureKline()
     }
     else if (AL1 == 1 && AL0 == 0)
     {
-        // lenght byte must be present
+        // length byte must be present
         _use_length_byte = true;
     }
     else if (AL1 == 0 && AL0 == 1)
     {
-        // lenght byte not needed
+        // length byte not needed
         _use_length_byte = false;
     }
 
@@ -1934,7 +2001,7 @@ void KWP2000::configureKline()
         _debug->println(key_bytes, BIN);
         _debug->print("Errors:\t\t\t\t");
         _debug->println(bitRead(_ECU_error, EE_CONFIG) == 1 ? "Yes" : "No");
-        _debug->print("Lenght byte:\t\t");
+        _debug->print("Length byte:\t\t");
         _debug->println(_use_length_byte == 1 ? "Yes" : "No");
         _debug->print("Addresses bytes:\t");
         _debug->println(_use_target_source_address == 1 ? "Yes" : "No");
@@ -1947,7 +2014,7 @@ void KWP2000::configureKline()
  * @brief The checksum is the sum of all data bytes modulo (&) 0xFF (same as being truncated to one byte)
  *
  * @param data All the bytes received
- * @param data_len The lenght of the response
+ * @param data_len The length of the response
  * @return The correct checksum
  */
 uint8_t KWP2000::calc_checksum(const uint8_t data[], const uint8_t data_len)
@@ -1997,3 +2064,5 @@ void KWP2000::endResponse(const uint8_t received_checksum)
         setError(EE_CS);
     }
 }
+
+#endif // KWP2000_cpp

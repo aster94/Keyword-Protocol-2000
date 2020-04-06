@@ -1,6 +1,6 @@
 lib/**
 .pio/**
-/test/**
+**/test/**
 include/**
 .vscode/**
 doxygen/**

@@ -1,45 +1,35 @@
 #include <Arduino.h>
 #include "KWP2000.h"
 
+// Different core have different way to use a Serial port
 #if defined(ARDUINO_ARCH_ESP32)
-HardwareSerial bike(2); // for the ESP32 core
+HardwareSerial bike(2);
+#define TX_PIN 17
 #elif defined(ARDUINO_ARCH_STM32)
-HardwareSerial bike(PA3, PA2); // for the stm32duino core
+HardwareSerial bike(PA3, PA2); // RX and TX
+#define TX_PIN PA2
 #else
-#define bike Serial3 // for the Arduino avr core
+#define bike Serial3
+#define TX_PIN 14
 #endif
 
 #define debug Serial
-#define TX_PIN 14
 
-KWP2000 ECU(&bike, TX_PIN);
-
-uint8_t dealer_status = false;
-char in;
-uint8_t fake_request[] = {1, 2};
+// Replace YOUR_MOTORBIKE with SUZUKI, KAWASAKI, YAMAHA or HONDA
+KWP2000 ECU(&bike, TX_PIN, YOUR_MOTORBIKE);
 
 void setup()
 {
     ECU.enableDebug(&debug, DEBUG_LEVEL_VERBOSE, 115200);
     //Serial.begin(); this is not needed because we use then same serial as the debug
-    //ECU.enableDealerMode(8);
-
-    while (!debug)
-    {
-        // wait for connection with the serial
-    }
-    while (debug.available() > 0)
-    {
-        debug.read(); // empty serial buffer
-    }
+    //ECU.enableDealerMode(pin); // This is available only on Suzuki bikes
 }
 
 void loop()
 {
-    //ECU.printStatus();
     if (debug.available() > 0)
     {
-        in = debug.read();
+        char in = debug.read();
         debug.print("User Input: ");
         debug.println(in);
 
@@ -53,11 +43,10 @@ void loop()
             break;
 
         case 'd':
-            dealer_status = !dealer_status;
-            ECU.dealerMode(dealer_status);
+            ECU.setDealerMode(!ECU.getDealerMode());
             break;
 
-        case 'D':
+        case 't':
             ECU.readTroubleCodes();
             break;
 
@@ -66,9 +55,8 @@ void loop()
             ECU.printSensorsData();
             break;
 
-        case 'h':
-            ECU.handleRequest(fake_request, sizeof(fake_request));
-            ECU.printLastResponse();
+        case 'p':
+            ECU.printStatus();
             break;
 
         case 'c':
