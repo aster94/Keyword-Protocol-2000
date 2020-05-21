@@ -278,7 +278,7 @@ int8_t KWP2000::initKline()
 
     switch (_init_phase)
     {
-    case 0: // this is a 1000ms HIGH signal
+    case 0: // HIGH for 1000ms
         if (_elapsed_time > ISO_T_IDLE)
         {
             _init_phase++;
@@ -288,7 +288,7 @@ int8_t KWP2000::initKline()
         digitalWrite(_k_out_pin, LOW);
         _init_phase++;
         break;
-    case 2: // this is a 25ms LOW signal
+    case 2: // LOW for 25ms on suzuki/kawasaki, 70ms on honda
         if (_elapsed_time > ISO_T_IDLE + ISO_T_INIL)
         {
             _init_phase++;
@@ -298,64 +298,97 @@ int8_t KWP2000::initKline()
         digitalWrite(_k_out_pin, HIGH);
         _init_phase++;
         break;
-    case 4: // this is a 25ms HIGH signal
-        if (_elapsed_time > ISO_T_IDLE + ISO_T_WUP)
+    case 4: // HIGH for 25ms on suzuki/kawasaki, 120ms on honda
+        if (_elapsed_time > ISO_T_IDLE + ISO_T_INIL + ISO_T_WUP)
         {
             _init_phase++;
         }
         break;
     case 5:
-        _init_sequence_started = false;
-        _start_time = 0;
-        _elapsed_time = 0;
+    {
         _kline->begin(ISO_BAUDRATE);
 
-        if (!handleRequest(start_com, LEN(start_com), true))
+        if (_brand == SUZUKI || _brand == KAWASAKI)
         {
-            if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-            {
-                _debug->println(F("Initialization failed"));
-            }
-            _ECU_status = false;
-            //ISO_T_IDLE = 0;
-            setError(EE_START);
-            return -2;
-        }
-
-        configureKline(); // maybe honda e yamaha shouldn't run this
-
-        if (_brand == KAWASAKI)
-        {
-            if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-            {
-                _debug->println(F("First handshake ok, now starting diagnostic session"));
-            }
-            if (!handleRequest(start_diagnostic, LEN(start_diagnostic)))
+            if (!handleRequest(start_com, LEN(start_com), true))
             {
                 if (_debug_level >= DEBUG_LEVEL_DEFAULT)
                 {
-                    _debug->println(F("Failed to start diagnostic"));
+                    _debug->println(F("Initialization failed"));
                 }
-                _ECU_status = false;
-                //ISO_T_IDLE = 0;
-                setError(EE_START);
-                return -2;
+                _init_phase = 100;
             }
-            if (_debug_level >= DEBUG_LEVEL_DEFAULT)
-            {
-                _debug->println(F("Start diagnostic successful"));
-            }
-        }
 
+            configureKline();
+            if (_brand == KAWASAKI)
+            {
+                if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+                {
+                    _debug->println(F("First handshake ok, now starting diagnostic session"));
+                }
+                if (!handleRequest(start_diagnostic, LEN(start_diagnostic)))
+                {
+                    if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+                    {
+                        _debug->println(F("Failed to start diagnostic"));
+                    }
+
+                    _init_phase = 100;
+                }
+                if (_debug_level >= DEBUG_LEVEL_DEFAULT)
+                {
+                    _debug->println(F("Start diagnostic successful"));
+                }
+            }
+            _init_phase = 99;
+        }
+        else if (_brand == YAMAHA || _brand == HONDA)
+        {
+            uint8_t kawa[] = {0xFE, 0x04, 0x72, 0x8C};
+            sendRequest(kawa, LEN(kawa), true, false);
+            _init_phase++;
+            _start_time = millis();
+            Serial.println(millis());
+        }
+        break;
+    }
+    case 6:
+        if (_elapsed_time >= 200 - ISO_T_P1)
+        {
+            Serial.println(millis());
+            _init_phase++;
+        }
+        break;
+    case 7:
+    {
+        uint8_t kawa[] = {0x72, 0x05, 0x00, 0xF0, 0x99};
+        sendRequest(kawa, LEN(kawa));
+        _init_phase = 99;
+        break;
+    }
+
+    case 99: // Completed
         if (_debug_level >= DEBUG_LEVEL_DEFAULT)
         {
             _debug->println(F("ECU connected"));
         }
+
+        _init_sequence_started = false;
         _connection_time = millis();
         _ECU_status = true;
         _ECU_error = 0;
+
+        if (_brand == YAMAHA || _brand == HONDA)
+        {
+            _last_correct_response = millis();
+        }
+        
         return 1;
-        break;
+    case 100:
+        _init_sequence_started = false;
+        _ECU_status = false;
+        setError(EE_START);
+        return -1;
     default:
         break;
     }
@@ -689,7 +722,7 @@ void KWP2000::keepAlive(uint16_t time)
     }
     else if (_brand == HONDA)
     {
-        handleRequest(tester_present_with_answer, LEN(tester_present_with_answer));
+        handleRequest(honda_request_sens, LEN(honda_request_sens));
     }
 }
 
@@ -1354,49 +1387,60 @@ void KWP2000::sendRequest(const uint8_t pid[], const uint8_t pid_len, const uint
     uint8_t echo = 0;
     uint8_t header_len = 1; // minimun length
 
-    // create the request
-    // make the header
-    if (_use_length_byte == true)
+    if (_brand == SUZUKI || _brand == KAWASAKI)
     {
-        //we use the length byte
-        request[0] = format_physical;
-        request[3] = pid_len;
-        header_len += 1;
-    }
-    else // don't use the length_byte
-    {
-        if (pid_len >= 64)
+        // create the request
+        // make the header
+        if (_use_length_byte == true)
         {
-            // we are forced to use the length byte
+            //we use the length byte
             request[0] = format_physical;
             request[3] = pid_len;
             header_len += 1;
         }
-        else
+        else // don't use the length_byte
         {
-            // the length byte is "inside" the format
-            request[0] = format_physical | pid_len;
+            if (pid_len >= 64)
+            {
+                // we are forced to use the length byte
+                request[0] = format_physical;
+                request[3] = pid_len;
+                header_len += 1;
+            }
+            else
+            {
+                // the length byte is "inside" the format
+                request[0] = format_physical | pid_len;
+            }
+        }
+
+        if (_use_target_source_address == true)
+        {
+            // add target and source address
+            request[1] = ECU_addr;
+            request[2] = OUR_addr;
+            header_len += 2;
+        }
+
+        request_len = header_len + pid_len + 1; // header + request + checksum
+
+        // add the PID
+        for (uint8_t k = 0; k < pid_len; k++)
+        {
+            request[header_len + k] = pid[k];
+        }
+
+        // checksum
+        request[request_len - 1] = calc_checksum(request, request_len - 1);
+    }
+    else if (_brand == YAMAHA || _brand == HONDA)
+    {
+        request_len = pid_len;
+        for (uint8_t k = 0; k < pid_len; k++)
+        {
+            request[k] = pid[k];
         }
     }
-
-    if (_use_target_source_address == true)
-    {
-        // add target and source address
-        request[1] = ECU_addr;
-        request[2] = OUR_addr;
-        header_len += 2;
-    }
-
-    request_len = header_len + pid_len + 1; // header + request + checksum
-
-    // add the PID
-    for (uint8_t k = 0; k < pid_len; k++)
-    {
-        request[header_len + k] = pid[k];
-    }
-
-    // checksum
-    request[request_len - 1] = calc_checksum(request, request_len - 1);
 
     // finally we send the request
     _elapsed_time = 0;

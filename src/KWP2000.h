@@ -50,7 +50,8 @@ enum brand
  */
 enum model
 {
-  NONE
+  NONE,
+  VFR
 };
 
 /**

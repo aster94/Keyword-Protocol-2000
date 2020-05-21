@@ -34,9 +34,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #define ISO_T_P3_MAX_LIMIT 89600 ///< P3 time between end of ECU responses and start of new tester request
 #define ISO_T_P4_MAX_LIMIT 20    ///< inter byte time for tester request
 // P2 (min & max), P3 (min & max) and P4 (min) are defined by the ECU with accessTimingParameter()
-#define ISO_T_IDLE 1000             ///< min 300, max undefined
-#define ISO_T_INIL (unsigned int)25 ///< Initialization low time
-#define ISO_T_WUP (unsigned int)50  ///< Wake up Pattern
+#define ISO_T_IDLE 1000   ///< min 300, max undefined
+uint16_t ISO_T_INIL = 25; ///< Initialization low time
+uint8_t ISO_T_WUP = 25;   ///< Wake up Pattern
 
 // Common values between all brands/bikes
 
@@ -82,7 +82,7 @@ uint8_t kawasaki_request_iap[2] = {0x21, 0x07};
 uint8_t kawasaki_request_iat[2] = {0x21, 0x05};
 uint8_t kawasaki_request_ect[2] = {0x21, 0x06};
 uint8_t yamaha_request_sens[2] = {'?'};
-uint8_t honda_request_sens[2] = {'?'};
+uint8_t honda_request_sens[7];
 
 uint8_t IDX_GPS;
 uint8_t IDX_CLUTCH;
@@ -151,6 +151,25 @@ void KWP2000::set_bike_specific_values(const brand brand, const model model)
     {
         // https://gonzos.net/projects/ctx-obd/
         ECU_addr = '?';
+        ISO_T_INIL = 70;
+        ISO_T_WUP = 120;
+        if (model == NONE)
+        {
+            Serial.println("errorrrrrr");
+        }
+        if (model == VFR)
+        {
+            honda_request_sens[0] = 0x72;
+            honda_request_sens[1] = 0x07;
+            honda_request_sens[2] = 0x72;
+            honda_request_sens[3] = 0x16;
+            honda_request_sens[4] = 0x00;
+            honda_request_sens[5] = 0x06;
+            honda_request_sens[6] = 0xF9;
+        }
+
+        IDX_RPM_H = 5;
+        IDX_RPM_L = 4;
     }
 }
 
