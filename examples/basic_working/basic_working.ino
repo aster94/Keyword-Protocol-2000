@@ -3,7 +3,7 @@
 
 // Different core have different way to use a Serial port
 #if defined(ARDUINO_ARCH_ESP32)
-HardwareSerial bike(2);
+#define bike Serial2
 #define TX_PIN 17
 #elif defined(ARDUINO_ARCH_STM32)
 HardwareSerial bike(PA3, PA2); // RX and TX

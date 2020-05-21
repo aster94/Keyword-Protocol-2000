@@ -27,7 +27,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include "KWP2000.h"
 #include "ISO.h"
 
-#warning "Not ready for Yamaha and Honda, before using this open an issue on github"
+#warning "Not ready for Yamaha and Honda, before using this code open an issue on github"
 
 #define maybe 2 ///< used when we don't know yet the behaviour of the K-Line
 
@@ -731,7 +731,7 @@ int8_t KWP2000::handleRequest(const uint8_t to_send[], const uint8_t send_len, c
             {
                 _debug->print(F("Attempt "));
                 _debug->print(attempt);
-                _debug->print(F(" not luckly"));
+                _debug->print(F(" not luckily"));
                 _debug->println(attempt < 3 ? ", trying again"
                                             : "\nWe wasn't able to comunicate");
             }
@@ -1710,7 +1710,7 @@ void KWP2000::listenResponse(const uint8_t use_delay)
                     }
                 }
                 break;
-            }         // end of the swith statement
+            }         // end of the switch statement
             n_byte++; // read the next byte of the response
         }             // end of the if _kline.available()
     }                 // end of the while timeout
