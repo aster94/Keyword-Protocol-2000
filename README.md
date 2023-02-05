@@ -3,6 +3,12 @@ The [KWP2000](https://en.wikipedia.org/wiki/Keyword_Protocol_2000/) is a communi
 
 If you want to read more about this protocol and OBD-II you can see the [protocol explained](protocol.md).
 
+## Projects
+Check out these nice projects:
+
+- [Smartphone dashboard](https://youtu.be/WHeit69LpBU)
+
+If you want to show your project make a pull request
 ## Supported Hardware
 Any microcontroller (MCU) that uses the Arduino framework could be used.
 
@@ -79,3 +85,7 @@ I do not assume and hereby disclaim any liability to any party for any damage to
     - https://forum.arduino.cc/index.php?topic=334778.0
 
 - Others
+
+## Donate
+
+If you liked the library and wish to donate you can sent to [PayPal](https://paypal.me/aster94)
